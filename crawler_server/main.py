@@ -10,10 +10,13 @@ import os
 
 app = FastAPI()
 
+if not os.path.exists(os.path.join(".", "logs")):
+    os.makedirs(os.path.join(".", "logs"))
+
 logging.basicConfig(
     level=logging.INFO,
     format='[crawler][%(asctime)s][%(levelname)s]:%(message)s',
-    handlers=[logging.StreamHandler(), logging.FileHandler("crawler.log", encoding='utf-8')]
+    handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(".", "logs", "crawler.log"), encoding='utf-8')]
 )
 
 cpt_services = RecentContestServices()
