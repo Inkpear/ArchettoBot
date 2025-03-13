@@ -1,6 +1,10 @@
-use reqwest::{Client, Error};
-use serde_json::{Value, json};
-use serde::{Serialize, Deserialize};
+use std::time::Duration;
+
+use reqwest::{Client, Error, Response};
+use cq_models::{CqMessage, MsgTarget};
+use tokio;
+
+mod cq_models;
 
 pub struct CqhttpServices {
     address: (String, u32),
@@ -11,84 +15,47 @@ impl CqhttpServices {
     pub fn new(ip: &str, port: u32) -> Self {
         CqhttpServices {
             address: (ip.to_string(), port),
-            client: Client::new()
+            client: Client::builder().timeout(Duration::from_secs(60)).build().unwrap(),
         }
+    }
+
+    pub async fn send_message(&self, message: CqMessage) -> Result<Response, Error>{
+        let (ip, port) = &self.address;
+        let response = if let MsgTarget::Group { group_id: _ } = &message.target {
+            self.client.post(format!("http://{}:{}/send_group_msg", ip, port)).json(&message).send().await?
+        } else {
+            self.client.post(format!("http://{}:{}/send_private_msg", ip, port)).json(&message).send().await?
+        };
+
+        Ok(response)
     }
 }
 
-#[derive(Serialize, Deserialize)]
-enum MsgTarget {
-    Private(String),
-    Group(String)
+#[tokio::test]
+async fn test_send_private_message() {
+    // use serde_json::json;
+
+    let service = CqhttpServices::new("localhost", 3000);
+    let message = MsgTarget::Private { user_id: "2754919327".into() }
+    .new_message()
+    .text("hello world");
+    // println!("{}", json!(message));
+    let res = service.send_message(message).await;
+    assert!(res.is_ok(), "{:#?}", res.err());
+
+    let resp = res.unwrap();
+    assert!(resp.status() == 200, "{:#?}", resp);
 }
 
-#[derive(Serialize, Deserialize)]
-struct Message {
-    #[serde(rename="type")]
-    type_: String,
-    data: Value
-}
+#[tokio::test]
+async fn test_send_group_message() {
+    let service = CqhttpServices::new("localhost", 3000);
+    let message = MsgTarget::new_group("861318999")
+    .text("hello");
 
-impl Message {
-    pub fn text(text: &str) -> Self {
-        Message {
-            type_: "text".into(),
-            data: json!({
-                "text": text
-            })
-        }
-    }
+    let res = service.send_message(message).await;
+    assert!(res.is_ok(), "{:#?}", res.err());
 
-    pub fn at(qq: &str) -> Self {
-        Message {
-            type_: "at".into(),
-            data: json!({
-                "qq": qq
-            })
-        }
-    }
-
-    pub fn image(image: &str) -> Self {
-        Message {
-            type_: "image".into(),
-            data: json!({
-                "file": image
-            })
-        }
-    }
-
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct CqMessage {
-    target: MsgTarget,
-    #[serde(rename="message")]
-    messages: Vec<Message>
-}
-
-impl CqMessage {
-    pub fn new_group(group_id: &str) -> Self {
-        CqMessage {
-            target: MsgTarget::Group(group_id.into()),
-            messages: vec![],
-        }
-    }
-
-    pub fn at(mut self, qq: &str) -> Self {
-        if let MsgTarget::Private(_) = self.target {
-            panic!("不允许在私聊消息中@!")
-        }
-        self.messages.push(Message::at(qq));
-        self
-    }
-
-    pub fn text(mut self, text: &str) -> Self {
-        self.messages.push(Message::text(text));
-        self
-    }
-
-    pub fn image(mut self, image: &str) -> Self {
-        self.messages.push(Message::image(image));
-        self
-    }
+    let resp = res.unwrap();
+    assert!(resp.status() == 200, "{:#?}", resp);
 }

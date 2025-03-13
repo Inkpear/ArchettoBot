@@ -7,7 +7,7 @@ ffmpeg.exe
 
 # === VS Code ===
 .vscode/*
-!.vscode/settings.json  # 可选：保留必要配置
+!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 
