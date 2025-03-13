@@ -5,6 +5,8 @@ from datetime import datetime
 from converter import *
 import logging
 import re
+import uvicorn
+import os
 
 app = FastAPI()
 
@@ -15,7 +17,7 @@ logging.basicConfig(
 )
 
 cpt_services = RecentContestServices()
-bili_services = BilibiliInfoServices()
+bili_services = BilibiliInfoServices(path=os.path.join("data"))
 
 
 @app.get("/get_competition_info/{_type}")
@@ -96,3 +98,6 @@ async def get_bilibili_info(
         data=video_info,
         timestamp=datetime.now().isoformat()
     )
+
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="127.0.0.1", port=8086, reload=True)

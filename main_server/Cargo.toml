@@ -1,0 +1,15 @@
+[package]
+name = "main_server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+actix-web = "4"
+serde_json = {version = "1.0.128", features = ["default"]}
+chrono =  "0.4.38"
+serde = {version = "1.0.210", features = ["derive"]}
+reqwest = { version = "0.12.8", features = ["json"] }
+actix-rt = "2.10.0"
+tokio = "1.40.0"
+regex = "1.11.0"
+maplit = "1.0.2"
