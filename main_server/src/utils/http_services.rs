@@ -1,10 +1,12 @@
 use std::time::Duration;
 
+use crawler_models::{BiliParams, CompetitionType};
 use cq_models::{CqMessage, MsgTarget};
-use reqwest::{Client, Error as ReqwestError, Response};
+use reqwest::{Client, Error as ReqwestError, Response, StatusCode};
 use thiserror::Error;
 use tokio;
 
+mod crawler_models;
 mod cq_models;
 
 pub struct HttpServices {
@@ -105,23 +107,54 @@ impl HttpServices {
 
         Ok(response)
     }
+
+    pub async fn get_bilibili_info(&self, params: &BiliParams) -> Result<Response, ReqwestError> {
+        let (ip, port) = &self.crawler_server_address;
+        let response = self
+            .client
+            .get(format!("http://{}:{}/get_bilibili_info", ip, port))
+            .query(params)
+            .send()
+            .await?;
+
+        Ok(response)
+    }
+
+    pub async fn get_competition_info(&self, cpt_type: &CompetitionType) -> Result<Response, ReqwestError> {
+        let (ip, port) = &self.crawler_server_address;
+        let type_ = match cpt_type {
+            CompetitionType::All => "luogu",
+            CompetitionType::Nowcoder => "nowcoder",
+            CompetitionType::Codeforces => "codeforces",
+            CompetitionType::Atcoder => "atcoder",
+            CompetitionType::Leetcode => "leetcode",
+            CompetitionType::Luogu => "luogu",
+            CompetitionType::Lanqiao => "lanqiao",
+        };
+
+        let reponse = self
+            .client
+            .get(format!("http://{}:{}/get_competition_info/{}", ip, port, type_))
+            .send()
+            .await?;
+
+        Ok(reponse)
+    }
 }
 
 #[tokio::test]
 async fn test_send_private_message() {
     // use serde_json::json;
-
     let service = HttpServices::builder()
-    .bot_server(("localhost", 3000))
-    .crawler_server(("localhost", 8086))
-    .build()
-    .unwrap();
+        .bot_server(("localhost", 3000))
+        .crawler_server(("localhost", 8086))
+        .build()
+        .unwrap();
     let message = MsgTarget::Private {
         user_id: "2754919327".into(),
     }
     .new_message()
     .text("hello world");
-    // println!("{}", json!(message));
     let res = service.send_message(message).await;
     assert!(res.is_ok(), "{:#?}", res.err());
 
@@ -132,10 +165,10 @@ async fn test_send_private_message() {
 #[tokio::test]
 async fn test_send_group_message() {
     let service = HttpServices::builder()
-    .bot_server(("localhost", 3000))
-    .crawler_server(("localhost", 8086))
-    .build()
-    .unwrap();
+        .bot_server(("localhost", 3000))
+        .crawler_server(("localhost", 8086))
+        .build()
+        .unwrap();
     let message = MsgTarget::new_group("861318999").text("hello");
 
     let res = service.send_message(message).await;
@@ -143,4 +176,56 @@ async fn test_send_group_message() {
 
     let resp = res.unwrap();
     assert!(resp.status() == 200, "{:#?}", resp);
+}
+
+#[tokio::test]
+async fn test_get_bili_info() {
+    use serde_json::Value;
+    let service = HttpServices::builder()
+        .bot_server(("localhost", 3000))
+        .crawler_server(("localhost", 8086))
+        .build()
+        .unwrap();
+    let bili_params = BiliParams::new("BV1PDKWeUEmX")
+        .only_info(true);
+
+    let res = service.get_bilibili_info(&bili_params).await;
+    assert!(res.is_ok(), "{:#?}", res.err());
+
+    let response = res.unwrap();
+    match response.status().as_u16() {
+        200 => {
+            let data: Value = response.json().await.unwrap();
+            println!("{:#}", data);
+        },
+        _ => {
+            let data: Value = response.json().await.unwrap();
+            panic!("{:#}", data);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_get_competition_info() {
+    use serde_json::Value;
+    let service = HttpServices::builder()
+        .bot_server(("localhost", 3000))
+        .crawler_server(("localhost", 8086))
+        .build()
+        .unwrap();
+
+    let res = service.get_competition_info(&CompetitionType::Leetcode).await;
+    assert!(res.is_ok(), "{:#?}", res.err());
+
+    let response = res.unwrap();
+    match response.status().as_u16() {
+        200 => {
+            let data: Value = response.json().await.unwrap();
+            println!("{:#}", data);
+        },
+        _ => {
+            let data: Value = response.json().await.unwrap();
+            panic!("{:#}", data);
+        }
+    }
 }

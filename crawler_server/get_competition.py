@@ -65,7 +65,7 @@ class RecentContestServices:
                     "name": name,
                     "start_time": start_time,
                     "duration": duration,
-                    "platform": "力扣",
+                    "platform": "Leetcode",
                     "link": link
                 })
             return contests
@@ -128,7 +128,7 @@ class RecentContestServices:
                     "name": title,
                     "start_time": start_time,
                     "duration": duration,
-                    "platform": "牛客",
+                    "platform": "Nowcoder",
                     "link": link
                 })
             return contests
@@ -184,7 +184,7 @@ class RecentContestServices:
             return contests
         except Exception as e:
             logger.exception(f"Error fetching AtCoder contests: {e}")
-            raise RuntimeError("获取牛客比赛失败") from e
+            raise RuntimeError("获取Atcoder比赛失败") from e
 
     def get_luogu_contests(self, is_rated=True):
         """获取洛谷比赛"""
@@ -223,7 +223,7 @@ class RecentContestServices:
                     "name": item["name"],
                     "start_time": start_time,
                     "duration": duration,
-                    "platform": "洛谷",
+                    "platform": "Luogu",
                     "link": f"https://www.luogu.com.cn/contest/{item['id']}"
                 })
             return contests
@@ -247,7 +247,7 @@ class RecentContestServices:
                     "name": item["name"],
                     "start_time": int(start_dt.timestamp()),
                     "duration": int(end_dt.timestamp()) - int(start_dt.timestamp()),
-                    "platform": "蓝桥云课",
+                    "platform": "Lanqiao",
                     "link": f"https://www.lanqiao.cn{item['html_url']}"
                 })
             return [c for c in contests if self._is_intime(c["start_time"], c["duration"]) == 0]
