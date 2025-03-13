@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crawler_models::{BiliParams, CompetitionType};
 use cq_models::{CqMessage, MsgTarget};
-use reqwest::{Client, Error as ReqwestError, Response, StatusCode};
+use reqwest::{Client, Error as ReqwestError, Response};
 use thiserror::Error;
 use tokio;
 
