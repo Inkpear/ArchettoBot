@@ -2,12 +2,13 @@ use std::io;
 use actix_web::{App, web, HttpServer};
 
 
-#[path ="utils/cqhttp.rs"]
-mod cqhttp;
+#[path="utils/http_services.rs"]
+mod http_services;
 
 mod models;
 mod handler;
 mod router;
+mod state;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
