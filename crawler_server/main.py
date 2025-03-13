@@ -1,10 +1,8 @@
 from get_competition import RecentContestServices
 from get_bilibili_info import BilibiliInfoServices
 from fastapi import FastAPI
-from datetime import datetime
-from converter import *
+from fastapi.responses import JSONResponse
 import logging
-import re
 import uvicorn
 import os
 
@@ -47,60 +45,36 @@ async def get_competition_info(_type: str):
         elif _type == "lanqiao":
             data += cpt_services.get_lanqiao_contests()
         else:
-            return Response(
-                code=400,
-                data=None,
-                messages="错误的请求参数!",
-                timestamp=datetime.now().isoformat()
-            )
+            return JSONResponse(status_code=400, content={
+                "messages": "错误的请求参数!"
+            }
+        )
     except Exception as e:
-        return Response(
-            code=400,
-            data=None,
-            messages=f"请求发生错误 {e}",
-            timestamp=datetime.now().isoformat()
+        return JSONResponse(status_code=502,content={
+                "messages": f"获取比赛信息失败!",
+            }
         )
 
-    contests = [to_contest(i) for i in data]
     logging.info("获取比赛信息成功!")
 
-    return Response(
-        code=200,
-        data=contests,
-        timestamp=datetime.now().isoformat()
-    )
+    return JSONResponse(status_code=200,content=data)
 
 
-@app.get("/get_bilibili_info/")
+@app.get("/get_bilibili_info")
 async def get_bilibili_info(
         bv: str,
         only_info: bool = False,
         only_audio: bool = False,
 ):
-    if not re.match(r"BV[a-zA-Z0-9]{10}", bv):
-        return Response(
-            code=400,
-            data=None,
-            message="不合法的bv号!",
-            timestamp=datetime.now().isoformat()
-        )
     try:
-        video_info = to_video_info(bili_services.update_video_info(bv))
+        video_info = bili_services.update_video_info(bv)
         if not only_info:
             bili_services.download_video_and_face(only_audio=only_audio)
     except Exception as _:
-        return Response(
-            code=400,
-            data=None,
-            message="获取视频信息发生错误!",
-            timestamp=datetime.now().isoformat()
-        )
-
-    return Response(
-        code=200,
-        data=video_info,
-        timestamp=datetime.now().isoformat()
-    )
+        return JSONResponse(status_code=502, content={
+            "message": "获取视频信息发生错误!",
+        })
+    return JSONResponse(status_code=200, content=video_info)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8086, reload=True)
+    uvicorn.run("main:app", host="localhost", port=8086, reload=True)
