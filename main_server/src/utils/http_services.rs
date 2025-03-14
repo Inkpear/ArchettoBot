@@ -1,14 +1,13 @@
 use std::time::Duration;
 
 use crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
-use cq_models::{CqMessage, MsgTarget};
+use crate::cq_models::{CqMessage, MsgTarget};
 use reqwest::{Client, Error as ReqwestError, Response};
 use serde_json::Value;
 use thiserror::Error;
 use tokio;
 
 mod crawler_models;
-mod cq_models;
 
 pub struct HttpServices {
     bot_server_address: (String, u32),
@@ -224,4 +223,5 @@ async fn test_get_competition_info() {
 
     let res = service.get_competition_info(&CompetitionType::Leetcode).await;
     assert!(res.is_ok(), "{:#?}", res.err());
+    println!("{:#?}", res.unwrap());
 }
