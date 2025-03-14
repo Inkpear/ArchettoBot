@@ -205,4 +205,6 @@ class BilibiliInfoServices:
         except requests.RequestException as e:
             logger.error(f"下载 {url} 失败: {e}")
             raise
-
+    
+    def set_cookie(self, cookie):
+        self.session.cookies = cookie

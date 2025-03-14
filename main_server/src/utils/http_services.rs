@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use crawler_models::{BiliParams, CompetitionType};
+use crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
 use cq_models::{CqMessage, MsgTarget};
 use reqwest::{Client, Error as ReqwestError, Response};
+use serde_json::Value;
 use thiserror::Error;
 use tokio;
 
@@ -22,6 +23,16 @@ pub enum BuilderError {
 
     #[error("HTTP client creation failed: {0}")]
     ClientCreation(#[from] ReqwestError),
+}
+
+#[derive(Debug, Error)]
+pub enum DataGetError {
+    #[error("From api: {0} get data Falid: {1}")]
+    GetDataError(&'static str, String),
+    
+    #[error("HTTP client creation failed: {0}")]
+    ClientCreation(#[from] ReqwestError),
+
 }
 
 pub struct HttpServicesBuilder {
@@ -108,19 +119,25 @@ impl HttpServices {
         Ok(response)
     }
 
-    pub async fn get_bilibili_info(&self, params: &BiliParams) -> Result<Response, ReqwestError> {
+    pub async fn get_bilibili_info(&self, bili_data: &BiliParams) -> Result<BiliInfo, DataGetError> {
         let (ip, port) = &self.crawler_server_address;
         let response = self
             .client
-            .get(format!("http://{}:{}/get_bilibili_info", ip, port))
-            .query(params)
+            .post(format!("http://{}:{}/get_bilibili_info", ip, port))
+            .json(bili_data)
             .send()
             .await?;
 
-        Ok(response)
+            if response.status().eq(&200) {
+                Ok(response.json::<BiliInfo>().await?)
+            } else {
+                Err(DataGetError::GetDataError(
+                    "/get_competition_info", response.json::<Value>().await?["message"].to_string()
+                ))
+            }
     }
 
-    pub async fn get_competition_info(&self, cpt_type: &CompetitionType) -> Result<Response, ReqwestError> {
+    pub async fn get_competition_info(&self, cpt_type: &CompetitionType) -> Result<Vec<Competition>, DataGetError> {
         let (ip, port) = &self.crawler_server_address;
         let type_ = match cpt_type {
             CompetitionType::All => "luogu",
@@ -132,19 +149,24 @@ impl HttpServices {
             CompetitionType::Lanqiao => "lanqiao",
         };
 
-        let reponse = self
+        let response = self
             .client
             .get(format!("http://{}:{}/get_competition_info/{}", ip, port, type_))
             .send()
             .await?;
 
-        Ok(reponse)
+        if response.status().eq(&200) {
+            Ok(response.json::<Vec<Competition>>().await?)
+        } else {
+            Err(DataGetError::GetDataError(
+                "/get_competition_info", response.json::<Value>().await?["message"].to_string()
+            ))
+        }
     }
 }
 
 #[tokio::test]
 async fn test_send_private_message() {
-    // use serde_json::json;
     let service = HttpServices::builder()
         .bot_server(("localhost", 3000))
         .crawler_server(("localhost", 8086))
@@ -180,7 +202,6 @@ async fn test_send_group_message() {
 
 #[tokio::test]
 async fn test_get_bili_info() {
-    use serde_json::Value;
     let service = HttpServices::builder()
         .bot_server(("localhost", 3000))
         .crawler_server(("localhost", 8086))
@@ -191,23 +212,10 @@ async fn test_get_bili_info() {
 
     let res = service.get_bilibili_info(&bili_params).await;
     assert!(res.is_ok(), "{:#?}", res.err());
-
-    let response = res.unwrap();
-    match response.status().as_u16() {
-        200 => {
-            let data: Value = response.json().await.unwrap();
-            println!("{:#}", data);
-        },
-        _ => {
-            let data: Value = response.json().await.unwrap();
-            panic!("{:#}", data);
-        }
-    }
 }
 
 #[tokio::test]
 async fn test_get_competition_info() {
-    use serde_json::Value;
     let service = HttpServices::builder()
         .bot_server(("localhost", 3000))
         .crawler_server(("localhost", 8086))
@@ -216,16 +224,4 @@ async fn test_get_competition_info() {
 
     let res = service.get_competition_info(&CompetitionType::Leetcode).await;
     assert!(res.is_ok(), "{:#?}", res.err());
-
-    let response = res.unwrap();
-    match response.status().as_u16() {
-        200 => {
-            let data: Value = response.json().await.unwrap();
-            println!("{:#}", data);
-        },
-        _ => {
-            let data: Value = response.json().await.unwrap();
-            panic!("{:#}", data);
-        }
-    }
 }
