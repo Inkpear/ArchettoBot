@@ -2,6 +2,7 @@ from get_competition import RecentContestServices
 from get_bilibili_info import BilibiliInfoServices
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 import logging
 import uvicorn
 import os
@@ -46,12 +47,12 @@ async def get_competition_info(_type: str):
             data += cpt_services.get_lanqiao_contests()
         else:
             return JSONResponse(status_code=400, content={
-                "messages": "错误的请求参数!"
+                "message": "错误的请求参数!"
             }
         )
     except Exception as e:
         return JSONResponse(status_code=502,content={
-                "messages": f"获取比赛信息失败!",
+                "message": f"获取比赛信息失败!",
             }
         )
 
@@ -59,21 +60,38 @@ async def get_competition_info(_type: str):
 
     return JSONResponse(status_code=200,content=data)
 
+class BiliData(BaseModel):
+    bv: str
+    cookie: str | None
+    quality: bool
+    only_info: bool
+    only_audio: bool
 
-@app.get("/get_bilibili_info")
-async def get_bilibili_info(
-        bv: str,
-        only_info: bool = False,
-        only_audio: bool = False,
-):
+@app.post("/get_bilibili_info")
+async def get_bilibili_info(bili_data: BiliData):
+    bv = bili_data.bv
+    cookie = bili_data.cookie
+    only_info = bili_data.only_info
+    only_audio = bili_data.only_audio
+    quality = bili_data.quality
+
+    if (cookie):
+        bili_services.set_cookie(cookie)
     try:
         video_info = bili_services.update_video_info(bv)
         if not only_info:
-            bili_services.download_video_and_face(only_audio=only_audio)
-    except Exception as _:
+            bili_services.download_video_and_face(only_audio=only_audio, quality=quality)
+    except RuntimeError as _:
         return JSONResponse(status_code=502, content={
             "message": "获取视频信息发生错误!",
         })
+
+    except Exception as e:
+        logging.exception(e)
+        return JSONResponse(status_code=502, content={
+            "message": "获取视频信息发生未知错误!",
+        })
+    
     return JSONResponse(status_code=200, content=video_info)
 
 if __name__ == "__main__":
