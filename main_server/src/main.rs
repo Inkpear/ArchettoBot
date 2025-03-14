@@ -5,8 +5,8 @@ use actix_web::{App, web, HttpServer};
 #[path="utils/http_services.rs"]
 mod http_services;
 
-#[path="utils/reporter_services.rs"]
-mod reporter_services;
+#[path="utils/scheduled_task_services.rs"]
+mod scheduled_task_services;
 
 #[path="utils/cq_models.rs"]
 mod cq_models;
