@@ -31,7 +31,6 @@ pub enum DataGetError {
     
     #[error("HTTP client creation failed: {0}")]
     ClientCreation(#[from] ReqwestError),
-
 }
 
 pub struct HttpServicesBuilder {
