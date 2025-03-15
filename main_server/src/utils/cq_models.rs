@@ -1,16 +1,24 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged)]
 pub enum MsgTarget {
     #[serde(rename_all = "snake_case")]
-    Group { group_id: String },
+    Group { group_id: u64 },
     #[serde(rename_all = "snake_case")]
-    Private { user_id: String },
+    Private { user_id: u64 },
 }
 
 impl MsgTarget {
+    pub fn new_group(group_id: u64) -> Self {
+        Self::Group { group_id }
+    }
+
+    pub fn new_private(user_id: u64) -> Self {
+        Self::Private { user_id }
+    }
+
     pub fn new_message(self) -> CqMessage {
         CqMessage {
             target: self,
@@ -18,16 +26,20 @@ impl MsgTarget {
         }
     }
 
-    pub fn new_group(group_id: &str) -> CqMessage {
+    pub fn new_group_message(group_id: u64) -> CqMessage {
         CqMessage {
-            target: Self::Group { group_id: group_id.into() },
+            target: Self::Group {
+                group_id,
+            },
             messages: vec![],
         }
     }
 
-    pub fn new_private(user_id: &str) -> CqMessage {
+    pub fn new_private_message(user_id: u64) -> CqMessage {
         CqMessage {
-            target: Self::Private { user_id: user_id.into() },
+            target: Self::Private {
+                user_id,
+            },
             messages: vec![],
         }
     }
@@ -51,7 +63,7 @@ pub struct CqMessage {
 impl CqMessage {
     pub fn at(mut self, qq: &str) -> Self {
         if let MsgTarget::Private { user_id: _ } = self.target {
-            panic!("不可使用在私聊中添加@")
+            panic!("不可使用在私聊中添加@!")
         }
 
         self.messages.push(Message {
@@ -107,7 +119,7 @@ impl CqMessage {
 #[test]
 fn test_cqmessage() {
     let message = MsgTarget::Group {
-        group_id: "123456".into(),
+        group_id: 123456,
     }
     .new_message()
     .at("all")

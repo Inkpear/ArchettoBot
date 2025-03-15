@@ -1,13 +1,12 @@
 use std::time::Duration;
 
-use crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
 use crate::cq_models::{CqMessage, MsgTarget};
+use crate::crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
+use chrono::Utc;
 use reqwest::{Client, Error as ReqwestError, Response};
 use serde_json::Value;
 use thiserror::Error;
 use tokio;
-
-mod crawler_models;
 
 pub struct HttpServices {
     bot_server_address: (String, u16),
@@ -28,7 +27,7 @@ pub enum BuilderError {
 pub enum DataGetError {
     #[error("From api: {0} get data Falid: {1}")]
     GetDataError(&'static str, String),
-    
+
     #[error("HTTP client creation failed: {0}")]
     ClientCreation(#[from] ReqwestError),
 }
@@ -117,7 +116,10 @@ impl HttpServices {
         Ok(response)
     }
 
-    pub async fn get_bilibili_info(&self, bili_data: &BiliParams) -> Result<BiliInfo, DataGetError> {
+    pub async fn get_bilibili_info(
+        &self,
+        bili_data: &BiliParams,
+    ) -> Result<BiliInfo, DataGetError> {
         let (ip, port) = &self.crawler_server_address;
         let response = self
             .client
@@ -126,22 +128,26 @@ impl HttpServices {
             .send()
             .await?;
 
-            if response.status().eq(&200) {
-                Ok(response.json::<BiliInfo>().await?)
-            } else {
-                Err(DataGetError::GetDataError(
-                    "/get_competition_info", response.json::<Value>().await?["message"].to_string()
-                ))
-            }
+        if response.status().eq(&200) {
+            Ok(response.json::<BiliInfo>().await?)
+        } else {
+            Err(DataGetError::GetDataError(
+                "/get_competition_info",
+                response.json::<Value>().await?["message"].to_string(),
+            ))
+        }
     }
 
-    pub async fn get_competition_info(&self, cpt_type: &CompetitionType) -> Result<Vec<Competition>, DataGetError> {
+    pub async fn get_competition_info(
+        &self,
+        cpt_type: &CompetitionType,
+    ) -> Result<Vec<Competition>, DataGetError> {
         let (ip, port) = &self.crawler_server_address;
         let type_ = match cpt_type {
-            CompetitionType::All => "luogu",
+            CompetitionType::All => "all",
             CompetitionType::Nowcoder => "nowcoder",
             CompetitionType::Codeforces => "codeforces",
-            CompetitionType::Atcoder => "atcoder",
+            CompetitionType::AtCoder => "atcoder",
             CompetitionType::Leetcode => "leetcode",
             CompetitionType::Luogu => "luogu",
             CompetitionType::Lanqiao => "lanqiao",
@@ -149,15 +155,24 @@ impl HttpServices {
 
         let response = self
             .client
-            .get(format!("http://{}:{}/get_competition_info/{}", ip, port, type_))
+            .get(format!(
+                "http://{}:{}/get_competition_info/{}",
+                ip, port, type_
+            ))
             .send()
             .await?;
 
         if response.status().eq(&200) {
-            Ok(response.json::<Vec<Competition>>().await?)
+            Ok(response
+                .json::<Vec<Competition>>()
+                .await?
+                .into_iter()
+                .filter(|competition| competition.start_time > Utc::now().timestamp())
+                .collect())
         } else {
             Err(DataGetError::GetDataError(
-                "/get_competition_info", response.json::<Value>().await?["message"].to_string()
+                "/get_competition_info",
+                response.json::<Value>().await?["message"].to_string(),
             ))
         }
     }
@@ -171,7 +186,7 @@ async fn test_send_private_message() {
         .build()
         .unwrap();
     let message = MsgTarget::Private {
-        user_id: "2754919327".into(),
+        user_id: 2754919327,
     }
     .new_message()
     .text("hello world");
@@ -189,7 +204,7 @@ async fn test_send_group_message() {
         .crawler_server(("localhost", 8086))
         .build()
         .unwrap();
-    let message = MsgTarget::new_group("861318999").text("hello");
+    let message = MsgTarget::new_group_message(861318999).text("hello");
 
     let res = service.send_message(message).await;
     assert!(res.is_ok(), "{:#?}", res.err());
@@ -205,8 +220,7 @@ async fn test_get_bili_info() {
         .crawler_server(("localhost", 8086))
         .build()
         .unwrap();
-    let bili_params = BiliParams::new("BV1PDKWeUEmX")
-        .only_info(true);
+    let bili_params = BiliParams::new("BV1PDKWeUEmX").only_info(true);
 
     let res = service.get_bilibili_info(&bili_params).await;
     assert!(res.is_ok(), "{:#?}", res.err());
@@ -220,7 +234,7 @@ async fn test_get_competition_info() {
         .build()
         .unwrap();
 
-    let res = service.get_competition_info(&CompetitionType::Leetcode).await;
+    let res = service.get_competition_info(&CompetitionType::All).await;
     assert!(res.is_ok(), "{:#?}", res.err());
     println!("{:#?}", res.unwrap());
 }
