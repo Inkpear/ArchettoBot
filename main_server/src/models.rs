@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::fs;
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Config {
-    main_server_addr: (String, u32),
-    crawler_server_addr: (String, u32),
-    bot_server_addr: (String, u32),
+    main_server_addr: (String, u16),
+    crawler_server_addr: (String, u16),
+    bot_server_addr: (String, u16),
 }
 
 impl Config {
@@ -24,6 +24,26 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(fs::write("./config.yaml", serde_yaml::to_string(self)?)?)
+        Ok(fs::write("../config.yaml", serde_yaml::to_string(self)?)?)
     }
+
+    pub fn main_server_addr<'a>(&'a self) -> (&'a str, u16) {
+        (&self.main_server_addr.0, self.main_server_addr.1)
+    }
+
+    pub fn bot_server_addr<'a>(&'a self) -> (&'a str, u16) {
+        (&self.bot_server_addr.0, self.bot_server_addr.1)
+    }
+
+    pub fn crawler_server_addr<'a>(&'a self) -> (&'a str, u16) {
+        (&self.crawler_server_addr.0, self.crawler_server_addr.1)
+    }
+}
+
+#[test]
+fn test_config() {
+    let config = Config::new();
+    let res = config.save();
+
+    assert!(res.is_ok(), "{:#?}", res.err());
 }

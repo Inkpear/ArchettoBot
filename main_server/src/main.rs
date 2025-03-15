@@ -1,6 +1,7 @@
 use std::io;
 use crate::models::Config;
-use actix_web::{App, web, HttpServer};
+use http_services::HttpServices;
+use actix_web::{web, App, HttpServer};
 
 
 #[path="utils/http_services.rs"]
@@ -19,15 +20,28 @@ mod state;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let Config = Config::from_path("./config.yaml")
-        .unwrap_or_else(|error| {
-            
-            Config::new()
+    let config = Config::from_path("./config.yaml")
+        .unwrap_or_else(|_| {
+            let config = Config::new();
+            let _ = config.save();
+            config
         });
-    HttpServer::new(|| {
-        App::new()
-    })
-    .bind(("127.0.0.1", 8085))?
+    
+    let http_services = web::Data::new(HttpServices::builder()
+        .bot_server(config.bot_server_addr())
+        .crawler_server(config.crawler_server_addr())
+        .build()
+        .unwrap());
+    
+    let app = {
+        move || {
+            App::new()
+            .app_data(http_services.clone())
+        }
+    };
+
+    HttpServer::new(app)
+    .bind(config.main_server_addr())?
     .run()
     .await   
 }

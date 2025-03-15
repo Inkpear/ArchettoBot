@@ -3,3 +3,4 @@ uvicorn
 pytz
 requests
 bs4
+pyyaml
