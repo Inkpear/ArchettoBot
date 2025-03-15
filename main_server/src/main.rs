@@ -1,4 +1,5 @@
 use std::io;
+use crate::models::Config;
 use actix_web::{App, web, HttpServer};
 
 
@@ -18,7 +19,11 @@ mod state;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    
+    let Config = Config::from_path("./config.yaml")
+        .unwrap_or_else(|error| {
+            
+            Config::new()
+        });
     HttpServer::new(|| {
         App::new()
     })

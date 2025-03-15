@@ -11,7 +11,7 @@ mod scheduled_task_models;
 
 #[derive(Debug, Error)]
 pub enum ScheduledTaskError {
-    #[error("任务已经过期!")]
+    #[error("Task has been Expired!")]
     TaskExpiredError,
 }
 
