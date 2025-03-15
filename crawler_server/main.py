@@ -1,6 +1,7 @@
+import asyncio
 from get_competition import RecentContestServices
 from get_bilibili_info import BilibiliInfoServices
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import logging
@@ -37,41 +38,42 @@ bili_services = BilibiliInfoServices(path=os.path.join("data"))
 
 @app.get("/get_competition_info/{_type}")
 async def get_competition_info(_type: str):
-    data = []
     try:
         if _type == "all":
-            data += cpt_services.get_nowcoder_contests()
-            data += cpt_services.get_luogu_contests()
-            data += cpt_services.get_atcoder_contests()
-            data += cpt_services.get_codeforces_contests()
-            data += cpt_services.get_lanqiao_contests()
-            data += cpt_services.get_leetcode_contests()
+            tasks = [
+                cpt_services.get_nowcoder_contests(),
+                cpt_services.get_luogu_contests(),
+                cpt_services.get_atcoder_contests(),
+                cpt_services.get_codeforces_contests(),
+                cpt_services.get_lanqiao_contests(),
+                cpt_services.get_leetcode_contests()
+            ]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            data = []
+            for result in results:
+                if isinstance(result, Exception):
+                    continue
+                data += result
         elif _type == "nowcoder":
-            data += cpt_services.get_nowcoder_contests()
-        elif _type == "codeforces":
-            data += cpt_services.get_codeforces_contests()
-        elif _type == "atcoder":
-            data += cpt_services.get_atcoder_contests()
-        elif _type == "leetcode":
-            data += cpt_services.get_leetcode_contests()
+            data = await cpt_services.get_nowcoder_contests()
         elif _type == "luogu":
-            data += cpt_services.get_luogu_contests()
+            data = await cpt_services.get_luogu_contests()
+        elif _type == "atcoder":
+            data = await cpt_services.get_atcoder_contests()
+        elif _type == "codeforces":
+            data = await cpt_services.get_codeforces_contests()
+        elif _type == "leetcode":
+            data = await cpt_services.get_leetcode_contests()
         elif _type == "lanqiao":
-            data += cpt_services.get_lanqiao_contests()
+            data = await cpt_services.get_lanqiao_contests()
         else:
-            return JSONResponse(status_code=400, content={
-                "message": "错误的请求参数!"
-            }
-        )
+            raise HTTPException(status_code=400, detail="错误的请求参数!")
     except Exception as e:
-        return JSONResponse(status_code=502,content={
-                "message": f"获取比赛信息失败!",
-            }
-        )
+        logging.error(f"API Error: {str(e)}")
+        raise HTTPException(status_code=502, detail="获取比赛信息失败")
 
     logging.info("获取比赛信息成功!")
-
-    return JSONResponse(status_code=200,content=data)
+    return data
 
 class BiliData(BaseModel):
     bv: str

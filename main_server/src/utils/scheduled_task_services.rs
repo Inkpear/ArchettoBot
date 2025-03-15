@@ -1,13 +1,11 @@
+use crate::scheduled_task_models::Task;
 use chrono::Utc;
 use dashmap::DashMap;
-use scheduled_task_models::Task;
 use std::{future::Future, sync::Arc};
-use tokio::spawn;
-use tokio::time::{sleep_until, Duration, Instant};
-use tokio::task::JoinHandle;
 use thiserror::Error;
-
-mod scheduled_task_models;
+use tokio::spawn;
+use tokio::task::JoinHandle;
+use tokio::time::{sleep_until, Duration, Instant};
 
 #[derive(Debug, Error)]
 pub enum ScheduledTaskError {

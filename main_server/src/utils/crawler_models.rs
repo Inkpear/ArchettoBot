@@ -1,4 +1,8 @@
+use std::time::Duration;
+
+use chrono::DateTime;
 use serde::{Deserialize, Serialize};
+use crate::models::TimeConverter;
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct BiliParams {
@@ -41,24 +45,49 @@ impl BiliParams {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Eq)]
 pub enum CompetitionType {
     All,
     Nowcoder,
     Codeforces,
-    Atcoder,
+    AtCoder,
     Leetcode,
     Luogu,
     Lanqiao,
 }
 
-#[derive(Deserialize, PartialEq, Debug)]
+#[derive(Deserialize, PartialEq, Debug, Clone, Eq)]
 pub struct Competition {
-    name: String,
-    platform: CompetitionType,
-    link: String,
-    start_time: i64,
-    duration: i64,
+    pub start_time: i64,
+    pub name: String,
+    pub platform: CompetitionType,
+    pub link: String,
+    pub duration: u64,
+}
+
+impl Competition {
+    pub fn fmt_string(&self) -> String {
+        let time = TimeConverter::from_utc_to_utc8(&DateTime::from_timestamp(self.start_time, 0).unwrap());
+        format!(
+            "请注意! 以下比赛即将开始!\n\n{}\n\n比赛时间:{}至{}\n\n比赛链接:{}",
+            self.name,
+            time.format("%H:%M"),
+            (time + Duration::from_secs(self.duration)).format("%H:%M"),
+            self.link
+        )
+    }
+}
+
+impl PartialOrd for Competition {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.start_time.cmp(&other.start_time))
+    }
+}
+
+impl Ord for Competition {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.start_time.cmp(&other.start_time)
+    }
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
