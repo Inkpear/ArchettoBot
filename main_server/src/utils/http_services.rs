@@ -10,8 +10,8 @@ use tokio;
 mod crawler_models;
 
 pub struct HttpServices {
-    bot_server_address: (String, u32),
-    crawler_server_address: (String, u32),
+    bot_server_address: (String, u16),
+    crawler_server_address: (String, u16),
     client: Client,
 }
 
@@ -34,8 +34,8 @@ pub enum DataGetError {
 }
 
 pub struct HttpServicesBuilder {
-    bot_server_address: Option<(String, u32)>,
-    crawler_server_address: Option<(String, u32)>,
+    bot_server_address: Option<(String, u16)>,
+    crawler_server_address: Option<(String, u16)>,
     timeout: Duration,
 }
 
@@ -48,12 +48,12 @@ impl HttpServicesBuilder {
         }
     }
 
-    pub fn bot_server(mut self, addr: (&str, u32)) -> Self {
+    pub fn bot_server(mut self, addr: (&str, u16)) -> Self {
         self.bot_server_address = Some((addr.0.to_string(), addr.1));
         self
     }
 
-    pub fn crawler_server(mut self, addr: (&str, u32)) -> Self {
+    pub fn crawler_server(mut self, addr: (&str, u16)) -> Self {
         self.crawler_server_address = Some((addr.0.to_string(), addr.1));
         self
     }
@@ -83,7 +83,7 @@ impl HttpServicesBuilder {
 }
 
 impl HttpServices {
-    pub fn new(bot_server_address: (String, u32), crawler_server_address: (String, u32)) -> Self {
+    pub fn new(bot_server_address: (String, u16), crawler_server_address: (String, u16)) -> Self {
         HttpServices {
             bot_server_address,
             crawler_server_address,

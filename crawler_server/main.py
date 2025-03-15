@@ -6,17 +6,30 @@ from pydantic import BaseModel
 import logging
 import uvicorn
 import os
+import yaml
 
 app = FastAPI()
 
-if not os.path.exists(os.path.join(".", "logs")):
-    os.makedirs(os.path.join(".", "logs"))
+log_path = os.path.join(".", "logs")
+config_path = os.path.join("config.yaml")
+
+if not os.path.exists(log_path):
+    os.makedirs(log_path)
 
 logging.basicConfig(
     level=logging.INFO,
     format='[crawler][%(asctime)s][%(levelname)s]:%(message)s',
     handlers=[logging.StreamHandler(), logging.FileHandler(os.path.join(".", "logs", "crawler.log"), encoding='utf-8')]
 )
+
+if not os.path.exists(config_path):
+    logging.warning("配置文件不存在, 已退出")
+    exit(0)
+
+config = None
+
+with open(config_path, 'r') as f:
+    config = yaml.load(f, Loader=yaml.FullLoader)
 
 cpt_services = RecentContestServices()
 bili_services = BilibiliInfoServices(path=os.path.join("data"))
@@ -95,4 +108,5 @@ async def get_bilibili_info(bili_data: BiliData):
     return JSONResponse(status_code=200, content=video_info)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="localhost", port=8086, reload=True)
+    host, port = config['crawler_server_addr']
+    uvicorn.run("main:app", host=host, port=port, reload=True)
