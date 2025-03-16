@@ -1,8 +1,12 @@
+from anyio import sleep
 import httpx
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import pytz
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _get_midnight_seconds():
@@ -46,7 +50,7 @@ class RecentContestServices:
         }
         """
         try:
-            async with httpx.AsyncClient() as client:  # 使用异步客户端
+            async with httpx.AsyncClient() as client: 
                 response = await client.post(self.leetcode_url, json={'query': query})
                 response.raise_for_status()
                 data = response.json()
@@ -71,7 +75,7 @@ class RecentContestServices:
             logger.exception(f"Error fetching LeetCode contests: {e}")
             raise RuntimeError("获取力扣比赛失败！") from e
 
-    async def get_codeforces_contests(self):  # 改为异步方法
+    async def get_codeforces_contests(self): 
         """获取Codeforces比赛"""
         try:
             async with httpx.AsyncClient() as client:
@@ -133,7 +137,7 @@ class RecentContestServices:
             logger.exception(f"Error fetching Nowcoder contests: {e}")
             raise RuntimeError("获取牛客比赛失败！") from e
 
-    async def get_atcoder_contests(self):  # 改为异步方法
+    async def get_atcoder_contests(self):  
         """获取AtCoder比赛"""
         try:
             async with httpx.AsyncClient() as client:
@@ -243,3 +247,4 @@ class RecentContestServices:
         except Exception as e:
             logger.exception(f"Error fetching Lanqiao contests: {e}")
             raise RuntimeError("获取蓝桥比赛失败") from e
+        

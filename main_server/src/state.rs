@@ -87,7 +87,7 @@ impl AppState {
         })
     }
 
-    pub async fn update_competitions(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn update_competitions(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let competitions = self
             .http_services
             .get_competition_info(&CompetitionType::All)

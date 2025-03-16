@@ -141,7 +141,7 @@ impl HttpServices {
     pub async fn get_competition_info(
         &self,
         cpt_type: &CompetitionType,
-    ) -> Result<Vec<Competition>, DataGetError> {
+    ) -> Result<Vec<Competition>, Box<dyn std::error::Error + Send + Sync>> {
         let (ip, port) = &self.crawler_server_address;
         let type_ = match cpt_type {
             CompetitionType::All => "all",
@@ -170,10 +170,10 @@ impl HttpServices {
                 .filter(|competition| competition.start_time > Utc::now().timestamp())
                 .collect())
         } else {
-            Err(DataGetError::GetDataError(
+            Err(Box::new(DataGetError::GetDataError(
                 "/get_competition_info",
                 response.json::<Value>().await?["message"].to_string(),
-            ))
+            )))
         }
     }
 }
@@ -235,7 +235,7 @@ async fn test_get_competition_info() {
         .build()
         .unwrap();
 
-    let res = service.get_competition_info(&CompetitionType::All).await;
+    let res = service.get_competition_info(&CompetitionType::Leetcode).await;
     assert!(res.is_ok(), "{:#?}", res.err());
     println!("{:#?}", res.unwrap());
 }

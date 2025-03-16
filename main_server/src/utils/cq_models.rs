@@ -1,12 +1,17 @@
-use std::env;
+use std::{env, time::Duration};
 
 use actix_web::web;
+use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::{crawler_models::BiliParams, models::FuncScope, state::AppState};
+use crate::{
+    crawler_models::{BiliParams, Competition},
+    models::{FuncScope, TimeConverter},
+    state::AppState,
+};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged)]
@@ -264,7 +269,9 @@ impl MessageHandler {
             match i.type_.as_str() {
                 "text" => {
                     let target = target.clone();
-                    let text = serde_json::from_value::<String>(i.data.get("text").unwrap().clone()).unwrap();
+                    let text =
+                        serde_json::from_value::<String>(i.data.get("text").unwrap().clone())
+                            .unwrap();
                     let args = text
                         .split(" ")
                         .map(|s| s.to_string())
@@ -272,6 +279,7 @@ impl MessageHandler {
                     if args.is_empty() {
                         continue;
                     }
+
                     if func_scope.bili_parse {
                         let regx = Regex::new(r"BV[a-zA-Z0-9]{10}")
                             .unwrap()
@@ -281,26 +289,29 @@ impl MessageHandler {
                             let bv = bv.as_str().to_string();
                             debug!("{}", bv);
                             Self::handle_bili_info(app_state.clone(), &bv, target.clone()).await;
+                            return;
                         }
                     }
 
-                    // match args[0].as_str() {
-                    //     "添加管理" =>
-                    //     _ => (),
-                    // }
+                    if func_scope.competition && args[0].eq("查询比赛") {
+                        Self::handle_competition_info(
+                            app_state.clone(),
+                            target.clone(),
+                            args.clone(),
+                        )
+                        .await;
+                        return;
+                    }
                 }
                 "json" => {
                     let value = serde_json::from_str::<Value>(
-                        &serde_json::from_value::<String>(i.data.get("data").unwrap().clone()).unwrap(),
+                        &serde_json::from_value::<String>(i.data.get("data").unwrap().clone())
+                            .unwrap(),
                     )
                     .unwrap();
-                    let title = value["meta"]["detail_1"]["title"]
-                        .as_str()
-                        .unwrap();
+                    let title = value["meta"]["detail_1"]["title"].as_str().unwrap();
                     if title.eq("哔哩哔哩") {
-                        let bv = value["meta"]["detail_1"]["qqdocurl"]
-                        .as_str()
-                        .unwrap();
+                        let bv = value["meta"]["detail_1"]["qqdocurl"].as_str().unwrap();
                         Self::handle_bili_info(app_state.clone(), bv, target.clone()).await;
                     }
                 }
@@ -362,6 +373,51 @@ impl MessageHandler {
             }
         } else {
             error!("获取{}信息失败\n{}", bv, resp.err().unwrap());
+        }
+    }
+
+    pub async fn handle_competition_info(
+        app_state: web::Data<AppState>,
+        target: MsgTarget,
+        args: Vec<String>,
+    ) {
+        let competitions = app_state
+            .competitions
+            .read()
+            .await
+            .clone()
+            .into_iter()
+            .filter(|competition| competition.start_time > Utc::now().timestamp())
+            .collect::<Vec<Competition>>();
+        if competitions.is_empty() {
+            return;
+        }
+        if args.len() == 1 {
+            let mut text = String::new();
+            for i in competitions[..competitions.len()].iter() {
+                let local_time = TimeConverter::from_utc_to_utc8(
+                    &DateTime::from_timestamp(i.start_time, 0).unwrap(),
+                );
+                text += &format!(
+                    "{}\n{}至{}\n{}\n\n",
+                    i.name,
+                    local_time.format("%Y/%m/%d-%H:%M"),
+                    (local_time + Duration::from_secs(i.duration)).format("%Y/%m/%d-%H:%M"),
+                    i.link
+                );
+            }
+            let msg = target.new_message().text(text.strip_suffix("\n").unwrap());
+            if let Ok(data) = app_state.http_services.send_message(msg).await {
+                let data = data.json::<Value>().await.unwrap();
+                if data["status"].as_str().unwrap().eq("failed") {
+                    error!("发送比赛信息失败");
+                } else {
+                    info!("发送比赛信息成功");
+                }
+            } else {
+                error!("连接bot_server失败");
+                return;
+            }
         }
     }
 }
