@@ -135,7 +135,10 @@ class BilibiliInfoServices:
     def download_video_and_face(self, url="", quality=False, only_audio=False):
         if url:
             self.update_video_info(url)
-
+        self.session.headers.update({
+            "Referer": self.bilibili_info.info["video_url"]
+        })
+        logger.info(f"下载的视频清晰度为:{self.bilibili_info.video_link[0 if quality else -1].get("name")}")
         video_link = self.bilibili_info.video_link[0 if quality else -1].get("url")
         audio_link = self.bilibili_info.audio_link[0].get("audio")
         face_link = self.bilibili_info.face.get("quality_face")
@@ -144,6 +147,10 @@ class BilibiliInfoServices:
         audio_path = os.path.join(self.path, "audio", f"{bv}.mp3")
         face_path = os.path.join(self.path, "face", f"{bv}.jpg")
         video_output_path = os.path.join(self.path, "video", f"{bv}.mp4")
+
+        if os.path.exists(video_output_path):
+            logger.info("检测到缓存, 使用缓存。")
+            return
 
         try:
             if only_audio:
@@ -198,7 +205,7 @@ class BilibiliInfoServices:
         try:
             with open(file=file_name, mode='wb') as fp:
                 resp = self.session.get(url, stream=True)
-                resp.raise_for_status()  # 检查 HTTP 状态码
+                resp.raise_for_status() 
                 for chunk in resp.iter_content(chunk_size=8192):
                     fp.write(chunk)
 

@@ -1,9 +1,11 @@
 use chrono::{DateTime, FixedOffset, Utc};
+use dashmap::DashMap;
+use env_logger::Target;
+use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_yaml;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::collections::HashMap;
-use dashmap::DashMap;
 
 use crate::cq_models::MsgTarget;
 
@@ -12,6 +14,8 @@ pub struct Config {
     main_server_addr: (String, u16),
     crawler_server_addr: (String, u16),
     bot_server_addr: (String, u16),
+    pub master: u64,
+    bot_id: u64,
 }
 
 impl Config {
@@ -20,6 +24,8 @@ impl Config {
             main_server_addr: ("localhost".to_string(), 8085),
             crawler_server_addr: ("localhost".to_string(), 8086),
             bot_server_addr: ("localhost".to_string(), 3000),
+            master: 123456789,
+            bot_id: 123456789,
         }
     }
 
@@ -46,14 +52,55 @@ impl Config {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct UserConfig {
+    admin: HashSet<u64>,
+}
+
+impl UserConfig {
+    pub fn new() -> Self {
+        Self {
+            admin: HashSet::new(),
+        }
+    }
+
+    pub fn check_admin(&self, user_id: u64) -> bool {
+        self.admin.contains(&user_id)
+    }
+
+    pub fn add_admin(&mut self, user_id: u64) -> bool {
+        self.admin.insert(user_id)
+    }
+
+    pub fn delet_admin(&mut self, user_id: u64) -> bool {
+        self.admin.remove(&user_id)
+    }
+
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let file = fs::read_to_string("../user_config.yaml")?;
+        let set = serde_yaml::from_str::<HashSet<u64>>(&file)?;
+        Ok(Self { admin: set })
+    }
+
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let _ = fs::write("../user_config.yaml", serde_yaml::to_string(&self.admin)?);
+
+        Ok(())
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct FuncScope {
+    pub bili_parse: bool,
     pub competition: bool,
+    pub group_increase_welcome: bool,
 }
 
 impl FuncScope {
     pub fn new() -> Self {
         Self {
-            competition: false
+            competition: false,
+            bili_parse: false,
+            group_increase_welcome: false,
         }
     }
 }
@@ -64,7 +111,7 @@ pub struct FuncScopeServices {
 impl FuncScopeServices {
     pub fn new() -> Self {
         Self {
-            func_scope_pool: DashMap::new()
+            func_scope_pool: DashMap::new(),
         }
     }
 
@@ -73,22 +120,32 @@ impl FuncScopeServices {
         let file = fs::read_to_string("../func_scope.yaml")?;
         let _ = serde_yaml::from_str::<HashMap<MsgTarget, FuncScope>>(&file)?
             .into_iter()
-            .for_each(|(k, v)| { res.func_scope_pool.insert(k, v); });
+            .for_each(|(k, v)| {
+                res.func_scope_pool.insert(k, v);
+            });
         Ok(res)
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut map = HashMap::new();
-        let _ = self.func_scope_pool
-            .iter()
-            .for_each(|entry| { map.insert(entry.key().clone(), entry.value().clone()); });
+        let _ = self.func_scope_pool.iter().for_each(|entry| {
+            map.insert(entry.key().clone(), entry.value().clone());
+        });
         let _ = fs::write("../func_scope.yaml", serde_yaml::to_string(&map)?);
-        
+
         Ok(())
     }
 
-    pub fn new_scope(&self, target: MsgTarget) -> Option<FuncScope> {
-        self.func_scope_pool.insert(target, FuncScope::new())
+    pub fn contains(&self, taget: &MsgTarget) -> bool {
+        self.func_scope_pool.contains_key(taget)
+    }
+
+    pub fn insert(&self, key: MsgTarget, value: FuncScope) {
+        self.func_scope_pool.insert(key, value);
+    }
+
+    pub fn get_value(&self, key: &MsgTarget) -> FuncScope {
+        self.func_scope_pool.get(key).unwrap().clone()
     }
 }
 
