@@ -1,13 +1,8 @@
-use crate::models::Config;
 use actix_web::{web, App, HttpServer};
-use http_services::HttpServices;
-use models::FuncScopeServices;
-use scheduled_task_services::ScheduledTaskService;
+use router::message_routes;
 use state::AppState;
-use std::collections::BinaryHeap;
 use std::io;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+
 
 #[path = "utils/http_services.rs"]
 mod http_services;
@@ -31,16 +26,17 @@ mod state;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let config = Config::from_path("./config.yaml").unwrap_or_else(|_| {
-        let config = Config::new();
-        let _ = config.save();
-        
-        config
-    });
-
     let app_state = web::Data::new(AppState::load().unwrap());
 
-    let app = { move || App::new().app_data(app_state.clone()) };
+    let config = app_state.config.clone();
+
+    let app = {
+        move || {
+            App::new()
+                .app_data(app_state.clone())
+                .configure(message_routes)
+        }
+    };
 
     HttpServer::new(app)
         .bind(config.main_server_addr())?

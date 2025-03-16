@@ -189,6 +189,7 @@ async fn test_send_private_message() {
         user_id: 2754919327,
     }
     .new_message()
+    .image("https://static.nowcoder.com/acm/images-acm/logo.png")
     .text("hello world");
     let res = service.send_message(message).await;
     assert!(res.is_ok(), "{:#?}", res.err());

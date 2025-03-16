@@ -1,8 +1,9 @@
 use std::time::Duration;
 
+use crate::models::TimeConverter;
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
-use crate::models::TimeConverter;
+use std::env;
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct BiliParams {
@@ -67,14 +68,59 @@ pub struct Competition {
 
 impl Competition {
     pub fn fmt_string(&self) -> String {
-        let time = TimeConverter::from_utc_to_utc8(&DateTime::from_timestamp(self.start_time, 0).unwrap());
+        let time =
+            TimeConverter::from_utc_to_utc8(&DateTime::from_timestamp(self.start_time, 0).unwrap());
+        let duration = chrono::Duration::seconds(self.duration as i64);
+        let hours = duration.num_hours();
+        let remaining_seconds = self.duration - (hours as u64 * 3600);
+        let minutes = remaining_seconds / 60;
         format!(
-            "请注意! 以下比赛即将开始!\n\n{}\n\n比赛时间:{}至{}\n\n比赛链接:{}",
+            "请注意! 以下比赛即将开始!\n\n{}\n\n比赛时间: {}至{}\n\n时长: {}小时{:02}分\n\n比赛链接: {}",
             self.name,
-            time.format("%H:%M"),
-            (time + Duration::from_secs(self.duration)).format("%H:%M"),
+            time.format("%m-%d %H:%M"),
+            (time + Duration::from_secs(self.duration)).format("%m-%d %H:%M"),
+            hours,
+            minutes,
             self.link
         )
+    }
+
+    pub fn face(&self) -> String {
+        let current_dir = env::current_dir().unwrap();
+        match self.platform {
+            CompetitionType::All => "".to_string(),
+            CompetitionType::Nowcoder => {
+                let absolute_path = current_dir
+                    .join("../data/logo/nowcoder_logo.png")
+                    .canonicalize()
+                    .unwrap();
+                absolute_path.display().to_string()
+            }
+            CompetitionType::Codeforces => {
+                "https://codeforces.org/s/29872/images/codeforces-sponsored-by-ton.png".to_string()
+            }
+            CompetitionType::AtCoder => {
+                "https://img.atcoder.jp/logo/atcoder/logo_transparent.png".to_string()
+            }
+            CompetitionType::Leetcode => {
+                let absolute_path = current_dir
+                    .join("../data/logo/leetcode_logo.png")
+                    .canonicalize()
+                    .unwrap();
+                absolute_path.display().to_string()
+            }
+            CompetitionType::Luogu => {
+                "https://fecdn.luogu.com.cn/luogu/logo.png?0fdd294ff62e331d2f70e1a37ba4ee02"
+                    .to_string()
+            }
+            CompetitionType::Lanqiao => {
+                let absolute_path = current_dir
+                    .join("../data/logo/lanqiao_logo.png")
+                    .canonicalize()
+                    .unwrap();
+                absolute_path.display().to_string()
+            }
+        }
     }
 }
 
@@ -92,16 +138,16 @@ impl Ord for Competition {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct BiliInfo {
-    bv: String,
-    title: String,
-    up: String,
-    coin: String,
-    date: String,
-    fav: String,
-    like: String,
-    share: String,
-    video_url: String,
-    view: String,
+    pub bv: String,
+    pub title: String,
+    pub up: String,
+    pub coin: String,
+    pub date: String,
+    pub fav: String,
+    pub like: String,
+    pub share: String,
+    pub video_url: String,
+    pub view: String,
 }
 
 #[test]
