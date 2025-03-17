@@ -1,13 +1,11 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use dashmap::DashMap;
-use env_logger::Target;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_yaml;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::hash::Hash;
 
 use crate::cq_models::MsgTarget;
 
@@ -70,11 +68,15 @@ impl UserConfig {
     }
 
     pub fn add_admin(&mut self, user_id: u64) -> bool {
-        self.admin.insert(user_id)
+        let res = self.admin.insert(user_id);
+        let _ = self.save();
+        res
     }
 
     pub fn delet_admin(&mut self, user_id: u64) -> bool {
-        self.admin.remove(&user_id)
+        let res = self.admin.remove(&user_id);
+        let _ = self.save();
+        res
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
@@ -115,6 +117,21 @@ impl FuncScopeServices {
         Self {
             func_scope_pool: DashMap::new(),
         }
+    }
+
+    pub fn set_scope(&self, func: &str, status: bool, target: &MsgTarget) {
+        match func {
+            "bili_parse" => self.func_scope_pool.get_mut(target).unwrap().bili_parse = status,
+            "competition" => self.func_scope_pool.get_mut(target).unwrap().competition = status,
+            "group_increase_welcome" => {
+                self.func_scope_pool
+                    .get_mut(target)
+                    .unwrap()
+                    .group_increase_welcome = status
+            }
+            _ => (),
+        }
+        let _ = self.save();
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
@@ -167,7 +184,7 @@ pub struct GroupData {
 impl GroupData {
     pub fn new() -> Self {
         Self {
-            data: HashMap::new()
+            data: HashMap::new(),
         }
     }
 

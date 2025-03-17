@@ -1,4 +1,4 @@
-use std::{env, time::Duration};
+use std::{char::ToLowercase, env, time::Duration};
 
 use actix_web::web;
 use chrono::{DateTime, Utc};
@@ -151,7 +151,7 @@ impl MessageParser {
                 "group_increase" => MessageType::GroupIncrease,
                 "group_decrease" => MessageType::GroupDecrease,
                 "group_recall" => MessageType::GroupRecall,
-                "friend_recall" => MessageType::GroupRecall,
+                "friend_recall" => MessageType::FriendRecall,
                 _ => MessageType::Unknow,
             };
         }
@@ -265,7 +265,7 @@ impl MessageHandler {
 
         let func_scope = app_state.func_scope_services.get_value(&target);
 
-        for i in messages.messages {
+        for i in messages.messages.iter() {
             match i.type_.as_str() {
                 "text" => {
                     let target = target.clone();
@@ -293,7 +293,7 @@ impl MessageHandler {
                         }
                     }
 
-                    if func_scope.competition && args[0].eq("查询比赛") {
+                    if args[0].eq("查询比赛") && func_scope.competition {
                         Self::handle_competition_info(
                             app_state.clone(),
                             target.clone(),
@@ -303,7 +303,23 @@ impl MessageHandler {
                         return;
                     }
 
-                    
+                    if args[0].eq("添加管理") && app_state.check_master(user_id) {
+                        Self::handle_add_admin(app_state, args, target, &messages, user_id).await;
+                        return;
+                    }
+
+                    if args[0].eq("删除管理") && app_state.check_master(user_id) {
+                        Self::handle_delete_admin(app_state, args, target, &messages, user_id)
+                            .await;
+                        return;
+                    }
+
+                    if args[0].eq("set_config")
+                        && (app_state.check_master(user_id) || app_state.check_admin(user_id).await)
+                    {
+                        Self::handle_set_config(app_state, args, target, user_id).await;
+                        return;
+                    }
                 }
                 "json" => {
                     let value = serde_json::from_str::<Value>(
@@ -357,25 +373,11 @@ impl MessageHandler {
             let message = target.clone().new_message().image(&face_path).text(&msg);
             let video = target.clone().new_message().video(&video_path);
             debug!("{:#}", json!(video));
-            if let Ok(data) = app_state.http_services.send_message(message).await {
-                let data = data.json::<Value>().await.unwrap();
-                if data["status"].as_str().unwrap().eq("failed") {
-                    error!("{} 发送视频信息失败", bili_info.bv)
-                } else {
-                    info!("{} 发送视频信息成功", bili_info.bv)
-                }
-            } else {
-                error!("连接bot_server失败");
+            if let Err(e) = app_state.http_services.send_message(message).await {
+                error!("连接bot_server失败 {}", e);
                 return;
             }
-            if let Ok(data) = app_state.http_services.send_message(video).await {
-                let data = data.json::<Value>().await.unwrap();
-                if data["status"].as_str().unwrap().eq("failed") {
-                    error!("{} 发送视频失败", bili_info.bv)
-                } else {
-                    info!("{} 发送视频成功", bili_info.bv)
-                }
-            }
+            let _ = app_state.http_services.send_message(video).await;
         } else {
             error!("获取{}信息失败\n{}", bv, resp.err().unwrap());
         }
@@ -411,18 +413,186 @@ impl MessageHandler {
                     i.link
                 );
             }
-            let msg = target.new_message().text(text.strip_suffix("\n\n").unwrap());
-            if let Ok(data) = app_state.http_services.send_message(msg).await {
-                let data = data.json::<Value>().await.unwrap();
-                if data["status"].as_str().unwrap().eq("failed") {
-                    error!("发送比赛信息失败");
-                } else {
-                    info!("发送比赛信息成功");
-                }
-            } else {
-                error!("连接bot_server失败");
+            let msg = target
+                .new_message()
+                .text(text.strip_suffix("\n\n").unwrap());
+            if let Err(e) = app_state.http_services.send_message(msg).await {
+                error!("连接bot_server失败 {}", e);
                 return;
             }
+        }
+    }
+
+    pub async fn handle_add_admin(
+        app_state: web::Data<AppState>,
+        args: Vec<String>,
+        target: MsgTarget,
+        messages: &CqMessage,
+        user_id: u64,
+    ) {
+        if let MsgTarget::Private { user_id: _ } = &target {
+            if args.len() < 2 {
+                let msg = target.new_message().text("缺少参数!");
+                let res = app_state.http_services.send_message(msg).await;
+                if let Err(e) = res {
+                    error!("连接bot_server失败! {}", e);
+                }
+                return;
+            }
+            let new_admin_id = args[1].parse::<u64>();
+            if let Err(_) = new_admin_id {
+                let msg = target.new_message().text("请发送正确的qq号");
+                let _ = app_state.http_services.send_message(msg).await;
+                return;
+            }
+            let new_admin_id = new_admin_id.unwrap();
+            app_state.user_config.write().await.add_admin(new_admin_id);
+            info!("已添加管理 {}", new_admin_id);
+            let reply = target
+                .new_message()
+                .text(&format!("成功添加管理: {}", new_admin_id));
+            let _ = app_state.http_services.send_message(reply);
+
+            return;
+        }
+        let at = messages.messages.iter().find(|item| item.type_.eq("at"));
+
+        if let None = at {
+            let msg = target.new_message().text("缺少参数!");
+            let res = app_state.http_services.send_message(msg).await;
+            if let Err(e) = res {
+                error!("连接bot_server失败! {}", e);
+            }
+            return;
+        }
+        let new_admin_id = at.unwrap().data.get("qq").unwrap().as_u64().unwrap();
+
+        app_state.user_config.write().await.add_admin(new_admin_id);
+        info!("已添加管理 {}", new_admin_id);
+        let reply = target
+            .new_message()
+            .at(&user_id.to_string())
+            .text(&format!("成功添加管理: {}", new_admin_id));
+        let _ = app_state.http_services.send_message(reply);
+
+        return;
+    }
+
+    pub async fn handle_delete_admin(
+        app_state: web::Data<AppState>,
+        args: Vec<String>,
+        target: MsgTarget,
+        messages: &CqMessage,
+        user_id: u64,
+    ) {
+        if let MsgTarget::Private { user_id: _ } = &target {
+            if args.len() < 2 {
+                let msg = target.new_message().text("缺少参数!");
+                let res = app_state.http_services.send_message(msg).await;
+                if let Err(e) = res {
+                    error!("连接bot_server失败! {}", e);
+                }
+                return;
+            }
+            let new_admin_id = args[1].parse::<u64>();
+            if let Err(_) = new_admin_id {
+                let msg = target.new_message().text("请发送正确的qq号");
+                let _ = app_state.http_services.send_message(msg).await;
+                return;
+            }
+            let new_admin_id = new_admin_id.unwrap();
+            app_state
+                .user_config
+                .write()
+                .await
+                .delet_admin(new_admin_id);
+            info!("已删除管理 {}", new_admin_id);
+            let reply = target
+                .new_message()
+                .text(&format!("成功删除管理: {}", new_admin_id));
+            let _ = app_state.http_services.send_message(reply);
+
+            return;
+        }
+        let at = messages.messages.iter().find(|item| item.type_.eq("at"));
+
+        if let None = at {
+            let msg = target.new_message().text("缺少参数!");
+            let res = app_state.http_services.send_message(msg).await;
+            if let Err(e) = res {
+                error!("连接bot_server失败! {}", e);
+            }
+            return;
+        }
+        let new_admin_id = at.unwrap().data.get("qq").unwrap().as_u64().unwrap();
+
+        app_state
+            .user_config
+            .write()
+            .await
+            .delet_admin(new_admin_id);
+        info!("已删除管理 {}", new_admin_id);
+        let reply = target
+            .new_message()
+            .at(&user_id.to_string())
+            .text(&format!("成功删除管理: {}", new_admin_id));
+        let _ = app_state.http_services.send_message(reply);
+
+        return;
+    }
+
+    pub async fn handle_set_config(
+        app_state: web::Data<AppState>,
+        args: Vec<String>,
+        target: MsgTarget,
+        user_id: u64
+    ) {
+        if let MsgTarget::Private { user_id: _ } = &target {
+            return;
+        }
+        match args.get(1).zip(args.get(2)) {
+            None => {
+                let msg = target
+                .new_message()
+                .at(user_id.to_string().as_ref())
+                .text("缺少必要参数!");
+                let _ = app_state.http_services.send_message(msg).await;
+                return;
+            },
+            Some((action_type, action_status)) => {
+                    let action = match action_type.as_str() {
+                        "哔哩哔哩视频解析" | "bv_parse" => "bili_parse",
+                        "入群通知" | "迎新" => "group_increase_welcome",
+                        "比赛通知" | "竞赛通知" => "competition",
+                        "通知" => {
+                            ""
+                        }
+                        _ => {
+                            let msg = target
+                            .new_message()
+                            .text("错误的功能名称!");
+                            let _ = app_state.http_services.send_message(msg);
+                            return;
+                        }
+                    };
+                    let action_status = match action_status.to_lowercase().as_str() {
+                        "t" | "true" => true,
+                        "f" | "false" => false,
+                        _ => {
+                            let msg = target
+                            .new_message()
+                            .text("未知的状态标识!");
+                            let _ = app_state.http_services.send_message(msg);
+                            return;
+                        }
+                    };
+                    app_state.func_scope_services.set_scope(action, action_status, &target);
+                    let msg = target
+                        .new_message()
+                        .at(user_id.to_string().as_str())
+                        .text("修改配置成功!");
+                    let _ = app_state.http_services.send_message(msg).await;
+                }
         }
     }
 }
