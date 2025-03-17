@@ -3,8 +3,9 @@ use std::time::Duration;
 use crate::cq_models::{CqMessage, MsgTarget};
 use crate::crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
 use chrono::Utc;
+use log::error;
 use reqwest::{Client, Error as ReqwestError, Response};
-use serde_json::Value;
+use serde_json::{json, Value};
 use thiserror::Error;
 use tokio;
 
@@ -97,7 +98,7 @@ impl HttpServices {
         HttpServicesBuilder::new()
     }
 
-    pub async fn send_message(&self, message: CqMessage) -> Result<Response, ReqwestError> {
+    pub async fn send_message(&self, message: CqMessage) -> Result<(), ReqwestError> {
         let (ip, port) = &self.bot_server_address;
         let response = if let MsgTarget::Group { group_id: _ } = &message.target {
             self.client
@@ -112,8 +113,12 @@ impl HttpServices {
                 .send()
                 .await?
         };
+        let data = response.json::<Value>().await.unwrap();
+        if data["status"].as_str().unwrap().eq("failed") {
+            error!("发送消息: {} 失败!", json!(message));
+        }
 
-        Ok(response)
+        Ok(())
     }
 
     pub async fn get_bilibili_info(
@@ -193,9 +198,6 @@ async fn test_send_private_message() {
     .text("hello world");
     let res = service.send_message(message).await;
     assert!(res.is_ok(), "{:#?}", res.err());
-
-    let resp = res.unwrap();
-    assert!(resp.status() == 200, "{:#?}", resp);
 }
 
 #[tokio::test]
@@ -209,9 +211,6 @@ async fn test_send_group_message() {
 
     let res = service.send_message(message).await;
     assert!(res.is_ok(), "{:#?}", res.err());
-
-    let resp = res.unwrap();
-    assert!(resp.status() == 200, "{:#?}", resp);
 }
 
 #[tokio::test]
