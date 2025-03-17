@@ -626,15 +626,19 @@ impl MessageHandler {
                     "比赛通知" | "竞赛通知" => "competition",
                     "通知" => {
                         let group_id = target.get_id();
+                        let mut welcom_msg = String::new();
+                        for i in args[2..].iter() {
+                            welcom_msg += i;
+                        }
                         app_state
                             .group_data
                             .write()
                             .await
-                            .set_welcome_message(group_id, &(" ".to_string() + action_status));
+                            .set_welcome_message(group_id, &(" ".to_string() + &welcom_msg));
                         let msg = target
                             .new_message()
                             .at(&user_id.to_string())
-                            .text(&format!(" 已设置入群通知为: {}", action_status));
+                            .text(&format!(" 已设置入群通知为: {}", welcom_msg));
                         let _ = app_state.http_services.send_message(msg).await;
                         return;
                     }
