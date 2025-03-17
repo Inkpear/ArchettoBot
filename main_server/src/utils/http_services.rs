@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::cq_models::{CqMessage, MsgTarget};
 use crate::crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
 use chrono::Utc;
-use log::error;
+use log::{error, info};
 use reqwest::{Client, Error as ReqwestError, Response};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -116,6 +116,8 @@ impl HttpServices {
         let data = response.json::<Value>().await.unwrap();
         if data["status"].as_str().unwrap().eq("failed") {
             error!("发送消息: {} 失败!", json!(message));
+        } else {
+            info!("发送消息 {}", json!(message));
         }
 
         Ok(())

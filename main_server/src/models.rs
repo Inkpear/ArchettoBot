@@ -194,6 +194,7 @@ impl GroupData {
 
     pub fn set_welcome_message(&mut self, group_id: u64, msg: &str) {
         self.data.insert(group_id, msg.to_string());
+        let _ = self.save();
     }
 
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
