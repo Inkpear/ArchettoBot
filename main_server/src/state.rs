@@ -1,6 +1,6 @@
 use crate::crawler_models::{Competition, CompetitionType};
 use crate::http_services::HttpServices;
-use crate::models::{Config, FuncScopeServices, UserConfig};
+use crate::models::{Config, FuncScopeServices, GroupData, UserConfig};
 use crate::scheduled_task_models::Task;
 use crate::scheduled_task_services::ScheduledTaskService;
 use chrono::DateTime;
@@ -18,6 +18,7 @@ pub struct AppState {
     pub competitions: Arc<RwLock<Vec<Competition>>>,
     pub func_scope_services: Arc<FuncScopeServices>,
     pub user_config: Arc<RwLock<UserConfig>>,
+    pub group_data: Arc<RwLock<GroupData>>,
 }
 
 impl AppState {
@@ -75,6 +76,12 @@ impl AppState {
             res
         });
 
+        let group_data = GroupData::load().unwrap_or_else(|_| {
+            let res = GroupData::new();
+            let _ = res.save();
+            res
+        });
+
         info!("配置载入完毕!");
 
         Ok(AppState {
@@ -84,6 +91,7 @@ impl AppState {
             competitions: Arc::new(RwLock::new(Vec::new())),
             func_scope_services: Arc::new(func_scope_services),
             user_config: Arc::new(RwLock::new(user_config)),
+            group_data: Arc::new(RwLock::new(group_data)),
         })
     }
 
