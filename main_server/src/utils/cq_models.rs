@@ -302,13 +302,18 @@ impl MessageHandler {
                         .await;
                         return;
                     }
+
+                    
                 }
                 "json" => {
                     let value = serde_json::from_str::<Value>(
                         &serde_json::from_value::<String>(i.data.get("data").unwrap().clone())
                             .unwrap(),
-                    )
-                    .unwrap();
+                    );
+                    if let Err(_) = value {
+                        return;
+                    }
+                    let value = value.unwrap();
                     let title = value["meta"]["detail_1"]["title"].as_str().unwrap();
                     if title.eq("哔哩哔哩") {
                         let bv = value["meta"]["detail_1"]["qqdocurl"].as_str().unwrap();
@@ -406,7 +411,7 @@ impl MessageHandler {
                     i.link
                 );
             }
-            let msg = target.new_message().text(text.strip_suffix("\n").unwrap());
+            let msg = target.new_message().text(text.strip_suffix("\n\n").unwrap());
             if let Ok(data) = app_state.http_services.send_message(msg).await {
                 let data = data.json::<Value>().await.unwrap();
                 if data["status"].as_str().unwrap().eq("failed") {

@@ -3,9 +3,11 @@ use dashmap::DashMap;
 use env_logger::Target;
 use log::{debug, info};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use serde_yaml;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::Hash;
 
 use crate::cq_models::MsgTarget;
 
@@ -154,6 +156,40 @@ pub struct TimeConverter;
 impl TimeConverter {
     pub fn from_utc_to_utc8(utc_time: &DateTime<Utc>) -> DateTime<FixedOffset> {
         utc_time.with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap())
+    }
+}
+
+#[derive(Serialize, Debug, Deserialize)]
+pub struct GroupData {
+    data: HashMap<u64, String>,
+}
+
+impl GroupData {
+    pub fn new() -> Self {
+        Self {
+            data: HashMap::new()
+        }
+    }
+
+    pub fn get_welcome_message(&self, group_id: u64) -> Option<&String> {
+        self.data.get(&group_id)
+    }
+
+    pub fn set_welcome_message(&mut self, group_id: u64, msg: &str) {
+        self.data.insert(group_id, msg.to_string());
+    }
+
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let file = fs::read_to_string("../group_data.yaml")?;
+        let map = serde_yaml::from_str::<HashMap<u64, String>>(&file)?;
+
+        Ok(Self { data: map })
+    }
+
+    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let _ = fs::write("../group_data.yaml", json!(self.data).to_string());
+
+        Ok(())
     }
 }
 
