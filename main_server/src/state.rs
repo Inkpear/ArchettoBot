@@ -121,12 +121,17 @@ impl AppState {
                 .iter()
                 .filter(|entry| entry.value().competition)
                 .for_each(|entry| targets.push(entry.key().clone()));
+            let func_scope_services = self.func_scope_services.clone();
             let task = Task::builder()
                 .id(&competition.link)
                 .target_time(utc_time - chrono::Duration::hours(1))
                 .task(async move {
                     for target in targets {
+                        if !func_scope_services.get_value(&target).competition {
+                            continue;
+                        }
                         let message = target
+                            .clone()
                             .new_message()
                             .image(&competition.face())
                             .text("\n")
@@ -134,8 +139,8 @@ impl AppState {
                             .text("\n")
                             .text(&competition.fmt_string());
                         match http_services.send_message(message).await {
-                            Ok(_) => info!("比赛:{}\n通知完毕!", name),
-                            Err(error) => error!("比赛:{} 通知失败!\n{}", name, error),
+                            Ok(_) => info!("{:?} 比赛:{}\n通知完毕!", target, name),
+                            Err(error) => error!("{:?} 比赛:{} 通知失败!\n{}", target, name, error),
                         }
                     }
                 })
