@@ -16,6 +16,7 @@ pub struct Config {
     bot_server_addr: (String, u16),
     pub master: u64,
     bot_id: u64,
+    pub heart_beat: (bool, u64, String),
 }
 
 impl Config {
@@ -26,6 +27,7 @@ impl Config {
             bot_server_addr: ("localhost".to_string(), 3000),
             master: 123456789,
             bot_id: 123456789,
+            heart_beat: (false, 3600 * 12, "bot is running".to_string())
         }
     }
 

@@ -1,4 +1,4 @@
-use std::{char::ToLowercase, env, time::Duration};
+use std::{char::ToLowercase, env, str::FromStr, time::Duration};
 
 use actix_rt::time;
 use actix_web::web;
@@ -327,21 +327,46 @@ impl MessageHandler {
                         return;
                     }
 
-                    if args[0].eq("添加管理") && app_state.check_master(user_id) {
+                    if args[0].eq("添加管理") && app_state.check_master(user_id).await {
                         Self::handle_add_admin(app_state, args, target, &messages, user_id).await;
                         return;
                     }
 
-                    if args[0].eq("删除管理") && app_state.check_master(user_id) {
+                    if args[0].eq("删除管理") && app_state.check_master(user_id).await {
                         Self::handle_delete_admin(app_state, args, target, &messages, user_id)
                             .await;
                         return;
                     }
 
                     if args[0].eq("set_config")
-                        && (app_state.check_master(user_id) || app_state.check_admin(user_id).await)
+                        && (app_state.check_master(user_id).await
+                            || app_state.check_admin(user_id).await)
                     {
                         Self::handle_set_config(app_state, args, target, user_id).await;
+                        return;
+                    }
+
+                    if args[0].eq("heat_beat") && app_state.check_master(user_id).await {
+                        let status = if let Some(status) = args.get(1) {
+                            match status.to_lowercase().as_str() {
+                                "t" | "true" => true,
+                                "f" | "false" => false,
+                                _ => {
+                                    return;
+                                }
+                            }
+                        } else {
+                            return;
+                        };
+                        {
+                            let mut config = app_state.config.write().await;
+                            config.heart_beat.0 = status;
+                            let _ = config.save();
+                        }
+                        let msg = target
+                            .new_message()
+                            .text(&format!("已设置心跳事件状态: {}", status));
+                        let _ = app_state.http_services.send_message(msg).await;
                         return;
                     }
                 }
@@ -417,12 +442,23 @@ impl MessageHandler {
         target: MsgTarget,
         args: Vec<String>,
     ) {
-        let competitions = app_state
-            .competitions
-            .read()
-            .await
-            .clone()
+        let competitions = app_state.competitions.read().await.clone();
+        let mut size = args
+            .get(1)
+            .unwrap_or(&"3".to_string())
+            .parse::<usize>()
+            .unwrap_or(3);
+        if let Some(arg) = args.get(1) {
+            size = if arg.eq("all") {
+                competitions.len()
+            } else {
+                size
+            };
+        }
+
+        let competitions = competitions
             .into_iter()
+            .take(size)
             .filter(|competition| competition.start_time > Utc::now().timestamp())
             .collect::<Vec<Competition>>();
         if competitions.is_empty() {
