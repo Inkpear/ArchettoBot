@@ -311,14 +311,10 @@ impl MessageHandler {
                                 .and_then(|cap| cap.get(0));
 
                         if let Some(matched) = regx {
-                            let content = matched.as_str().to_ascii_lowercase();
+                            let content = matched.as_str();
                             debug!("匹配到哔哩哔哩ID: {}", content);
-                            Self::handle_bili_info(
-                                app_state.clone(),
-                                &content,
-                                target.clone(),
-                            )
-                            .await;
+                            Self::handle_bili_info(app_state.clone(), &content, target.clone())
+                                .await;
                             return;
                         }
                     }
@@ -352,7 +348,7 @@ impl MessageHandler {
                         return;
                     }
 
-                    if args[0].eq("heat_beat") && app_state.check_master(user_id).await {
+                    if args[0].eq("heart_beat") && app_state.check_master(user_id).await {
                         let status = if let Some(status) = args.get(1) {
                             match status.to_lowercase().as_str() {
                                 "t" | "true" => true,
@@ -362,6 +358,8 @@ impl MessageHandler {
                                 }
                             }
                         } else {
+                            let msg = target.new_message().text("请设置状态true or false");
+                            let _ = app_state.http_services.send_message(msg).await;
                             return;
                         };
                         {
@@ -461,7 +459,6 @@ impl MessageHandler {
                 size
             };
         }
-
         let competitions = competitions
             .into_iter()
             .take(size)
@@ -470,27 +467,25 @@ impl MessageHandler {
         if competitions.is_empty() {
             return;
         }
-        if args.len() == 1 {
-            let mut text = String::new();
-            for i in competitions[..competitions.len()].iter() {
-                let local_time = TimeConverter::from_utc_to_utc8(
-                    &DateTime::from_timestamp(i.start_time, 0).unwrap(),
-                );
-                text += &format!(
-                    "{}\n{}至{}\n{}\n\n",
-                    i.name,
-                    local_time.format("%Y/%m/%d-%H:%M"),
-                    (local_time + Duration::from_secs(i.duration)).format("%Y/%m/%d-%H:%M"),
-                    i.link
-                );
-            }
-            let msg = target
-                .new_message()
-                .text(text.strip_suffix("\n\n").unwrap());
-            if let Err(e) = app_state.http_services.send_message(msg).await {
-                error!("连接bot_server失败 {}", e);
-                return;
-            }
+        let mut text = String::new();
+        for i in competitions.iter() {
+            let local_time = TimeConverter::from_utc_to_utc8(
+                &DateTime::from_timestamp(i.start_time, 0).unwrap(),
+            );
+            text += &format!(
+                "{}\n{}至{}\n{}\n\n",
+                i.name,
+                local_time.format("%Y/%m/%d-%H:%M"),
+                (local_time + Duration::from_secs(i.duration)).format("%Y/%m/%d-%H:%M"),
+                i.link
+            );
+        }
+        let msg = target
+            .new_message()
+            .text(text.strip_suffix("\n\n").unwrap());
+        if let Err(e) = app_state.http_services.send_message(msg).await {
+            error!("连接bot_server失败 {}", e);
+            return;
         }
     }
 
