@@ -1,12 +1,10 @@
-use std::{char::ToLowercase, env, str::FromStr, time::Duration};
-
-use actix_rt::time;
 use actix_web::web;
 use chrono::{DateTime, Utc};
 use log::{debug, error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::{env, time::Duration};
 
 use crate::{
     crawler_models::{BiliParams, Competition},
@@ -305,14 +303,22 @@ impl MessageHandler {
                     }
 
                     if func_scope.bili_parse {
-                        let regx = Regex::new(r"BV[a-zA-Z0-9]{10}")
-                            .unwrap()
-                            .captures(&args[0])
-                            .and_then(|cap| cap.get(0));
-                        if let Some(bv) = regx {
-                            let bv = bv.as_str().to_string();
-                            debug!("{}", bv);
-                            Self::handle_bili_info(app_state.clone(), &bv, target.clone()).await;
+                        // 匹配 bv, av, 短链
+                        let regx =
+                            Regex::new(r"(?i)(https://b23\.tv/[\da-z]{7}|bv[\da-z]{10}|av\d+)")
+                                .unwrap()
+                                .captures(&args[0])
+                                .and_then(|cap| cap.get(0));
+
+                        if let Some(matched) = regx {
+                            let content = matched.as_str().to_ascii_lowercase();
+                            debug!("匹配到哔哩哔哩ID: {}", content);
+                            Self::handle_bili_info(
+                                app_state.clone(),
+                                &content,
+                                target.clone(),
+                            )
+                            .await;
                             return;
                         }
                     }
