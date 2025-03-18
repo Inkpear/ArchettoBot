@@ -4,7 +4,7 @@ use crate::cq_models::{CqMessage, MsgTarget};
 use crate::crawler_models::{BiliInfo, BiliParams, Competition, CompetitionType};
 use chrono::Utc;
 use log::{error, info};
-use reqwest::{Client, Error as ReqwestError, Response};
+use reqwest::{Client, Error as ReqwestError};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tokio;
@@ -116,10 +116,10 @@ impl HttpServices {
         let data = response.json::<Value>().await.unwrap();
         if data["status"].as_str().unwrap().eq("failed") {
             error!("发送消息: {} 失败!", json!(message));
-            return Ok(true);
+            return Ok(false);
         } else {
             info!("发送消息 {}", json!(message));
-            return Ok(false);
+            return Ok(true);
         }
     }
 
@@ -236,7 +236,7 @@ async fn test_get_competition_info() {
         .build()
         .unwrap();
 
-    let res = service.get_competition_info(&CompetitionType::Leetcode).await;
+    let res = service.get_competition_info(&CompetitionType::Codeforces).await;
     assert!(res.is_ok(), "{:#?}", res.err());
     println!("{:#?}", res.unwrap());
 }

@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 import pytz
 import logging
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ class RecentContestServices:
     def __init__(self, day=7):
         self.leetcode_url = "https://leetcode.cn/graphql"
         self.atcoder_url = "https://atcoder.jp/contests/"
-        self.codeforces_url = "https://mirror.codeforces.com/api/contest.list?gym=false"
+        self.codeforces_url = "https://codeforces.com/api/contest.list?gym=false"
         self.luogu_url = "https://www.luogu.com.cn/contest/list?page=1&_contentOnly=1"
         self.lanqiao_url = ("https://www.lanqiao.cn/api/v2/contests/?sort=opentime&paginate=0&status=not_finished"
                             "&game_type_code=2")
@@ -80,7 +81,8 @@ class RecentContestServices:
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(self.codeforces_url)
-                response.raise_for_status()
+                response.raise_for_status
+
                 data = response.json()
                 contests = []
                 for item in sorted(data["result"], key=lambda x: -x["startTimeSeconds"]):
@@ -94,7 +96,7 @@ class RecentContestServices:
                         "start_time": start_time,
                         "duration": duration,
                         "platform": "Codeforces",
-                        "link": f"https://mirror.codeforces.com/contests/{item['id']}"
+                        "link": f"https://codeforces.com/contests/{item['id']}"
                     })
                 return contests
         except Exception as e:
