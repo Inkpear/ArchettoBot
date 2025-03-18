@@ -98,7 +98,7 @@ impl HttpServices {
         HttpServicesBuilder::new()
     }
 
-    pub async fn send_message(&self, message: CqMessage) -> Result<(), ReqwestError> {
+    pub async fn send_message(&self, message: CqMessage) -> Result<bool, ReqwestError> {
         let (ip, port) = &self.bot_server_address;
         let response = if let MsgTarget::Group { group_id: _ } = &message.target {
             self.client
@@ -116,11 +116,11 @@ impl HttpServices {
         let data = response.json::<Value>().await.unwrap();
         if data["status"].as_str().unwrap().eq("failed") {
             error!("发送消息: {} 失败!", json!(message));
+            return Ok(true);
         } else {
             info!("发送消息 {}", json!(message));
+            return Ok(false);
         }
-
-        Ok(())
     }
 
     pub async fn get_bilibili_info(
