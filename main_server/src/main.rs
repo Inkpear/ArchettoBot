@@ -1,5 +1,6 @@
 use actix_web::{web, App, HttpServer};
-use chrono::Local;
+use chrono::{DateTime, Local};
+use cq_models::MsgTarget;
 use log::{info, error};
 use router::message_routes;
 use state::AppState;
@@ -31,8 +32,12 @@ mod state;
 async fn main() -> io::Result<()> {
     let app_state = web::Data::new(AppState::load().unwrap());
 
-    let config = app_state.config.clone();
-
+    let config = app_state.config.read().await;
+    let (ip, port) = (
+        config.main_server_addr().0.to_string(),
+        config.main_server_addr().1,
+    );
+    drop(config);
     spawn(check_date_update(app_state.clone()));
 
     let app = {
@@ -43,7 +48,7 @@ async fn main() -> io::Result<()> {
         }
     };
     HttpServer::new(app)
-        .bind(config.main_server_addr())?
+        .bind((ip.as_str(), port))?
         .run()
         .await
 }
@@ -83,5 +88,49 @@ async fn check_date_update(app_state: web::Data<AppState>) -> Result<(), Box<dyn
                 error!("更新失败! 发生错误{}", resp.err().unwrap());
             }
         }
+    }
+}
+
+pub async fn heart_beat(app_state: web::Data<AppState>) {
+    use chrono::Utc;
+    use tokio::time::{sleep, Duration};
+    use scheduled_task_models::Task;
+    let (duration, master) = {
+        let config = app_state.config.read().await;
+        (Duration::from_secs(config.heart_beat.1), config.master)
+    };
+
+    loop {
+        let (heart_beat_status, _, heart_beat_text) = {
+            app_state.config.read().await.heart_beat.clone()
+        };
+        
+        if heart_beat_status {
+            let msg = MsgTarget::new_private_message(
+                master
+            )
+            .text(&heart_beat_text);
+            let http_services = app_state.http_services.clone();
+            let task = Task::builder()
+                .id("bot_heart_beat")
+                .target_time(Utc::now() + Duration::from_secs(1))
+                .task(async move {
+                    let res = http_services.send_message(msg).await;
+                    if let Ok(status) = res {
+                        if status {
+                            info!("向[{}]:发送心跳成功!", master);
+                        } else {
+                            error!("发送心跳事件失败!");
+                        }
+                    } else {
+                        error!("bot server 连接失败!");
+                    }
+                })
+                .build()
+                .unwrap();
+                let _ = app_state.scheduled_task_services.add_task(task).await;
+        }
+
+        sleep(duration).await;
     }
 }
