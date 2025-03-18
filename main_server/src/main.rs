@@ -1,12 +1,10 @@
 use actix_web::{web, App, HttpServer};
-use chrono::{DateTime, Local};
 use cq_models::MsgTarget;
-use log::{info, error};
+use log::{error, info};
 use router::message_routes;
 use state::AppState;
-use tokio::spawn;
 use std::io;
-
+use tokio::spawn;
 
 #[path = "utils/http_services.rs"]
 mod http_services;
@@ -32,13 +30,29 @@ mod state;
 async fn main() -> io::Result<()> {
     let app_state = web::Data::new(AppState::load().unwrap());
 
-    let config = app_state.config.read().await;
-    let (ip, port) = (
-        config.main_server_addr().0.to_string(),
-        config.main_server_addr().1,
-    );
-    drop(config);
-    spawn(check_date_update(app_state.clone()));
+    let (ip, port) = {
+        let config = app_state.config.read().await;
+        (
+            config.main_server_addr().0.to_string(),
+            config.main_server_addr().1,
+        )
+    };
+
+    spawn({
+        let app_state = app_state.clone();
+        async move {
+            if let Err(e) = interval_task_update(app_state).await {
+                error!("定时任务失败: {}", e);
+            }
+        }
+    });
+
+    spawn({
+        let app_state = app_state.clone();
+        async move {
+            heart_beat(app_state).await;
+        }
+    });
 
     let app = {
         move || {
@@ -47,69 +61,60 @@ async fn main() -> io::Result<()> {
                 .configure(message_routes)
         }
     };
-    HttpServer::new(app)
-        .bind((ip.as_str(), port))?
-        .run()
-        .await
+    HttpServer::new(app).bind((ip.as_str(), port))?.run().await
 }
 
-async fn check_date_update(app_state: web::Data<AppState>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn interval_task_update(
+    app_state: web::Data<AppState>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use chrono::Local;
     use tokio::time::{sleep, Duration};
 
-    let mut last_date = Local::now().date_naive();
-    info!("开始初始化信息");
-    let resp = app_state.update_competitions().await;
-    if let Ok(_) = resp {
-        info!("比赛信息初始化完成!");
-    } else {
-        error!("初始化失败! 发生错误{}", resp.err().unwrap())
-    }
+    info!("开始初始化比赛信息");
+    app_state.update_competitions().await.map_err(|e| {
+        error!("初始化失败: {}", e);
+        e
+    })?;
+    info!("比赛信息初始化完成!");
 
     loop {
         let now = Local::now();
-        let next_day = (now + chrono::Duration::days(1))
-            .date_naive()
-            .and_hms_opt(2, 0, 0)
-            .unwrap();
-        let duration = (next_day - now.naive_local())
-            .to_std()
-            .unwrap_or(Duration::from_secs(60));
+        let next_day = now.date_naive().succ_opt().unwrap_or(now.date_naive());
+        let next_run_time = next_day.and_hms_opt(2, 0, 0).expect("无效时间设置");
+
+        let duration = if next_run_time > now.naive_local() {
+            (next_run_time - now.naive_local()).to_std()?
+        } else {
+            Duration::from_secs(0)
+        };
 
         sleep(duration).await;
 
-        let current_date = Local::now().date_naive();
-        if current_date != last_date {
-            last_date = current_date;
-            info!("开始执行周期任务");
-            let resp = app_state.update_competitions().await;
-            if let Ok(_) = resp {
-                info!("比赛信息更新完成!");
-            } else {
-                error!("更新失败! 发生错误{}", resp.err().unwrap());
-            }
+        info!("开始执行周期任务");
+        match app_state.update_competitions().await {
+            Ok(_) => info!("比赛信息更新完成!"),
+            Err(e) => error!("更新失败: {}", e),
         }
     }
 }
 
 pub async fn heart_beat(app_state: web::Data<AppState>) {
     use chrono::Utc;
-    use tokio::time::{sleep, Duration};
     use scheduled_task_models::Task;
+    use tokio::time::{sleep, Duration};
     let (duration, master) = {
         let config = app_state.config.read().await;
         (Duration::from_secs(config.heart_beat.1), config.master)
     };
 
     loop {
-        let (heart_beat_status, _, heart_beat_text) = {
-            app_state.config.read().await.heart_beat.clone()
+        let (heart_beat_status, heart_beat_text) = {
+            let config = app_state.config.read().await;
+            (config.heart_beat.0, config.heart_beat.2.clone())
         };
-        
+
         if heart_beat_status {
-            let msg = MsgTarget::new_private_message(
-                master
-            )
-            .text(&heart_beat_text);
+            let msg = MsgTarget::new_private_message(master).text(&heart_beat_text);
             let http_services = app_state.http_services.clone();
             let task = Task::builder()
                 .id("bot_heart_beat")
@@ -128,7 +133,7 @@ pub async fn heart_beat(app_state: web::Data<AppState>) {
                 })
                 .build()
                 .unwrap();
-                let _ = app_state.scheduled_task_services.add_task(task).await;
+            let _ = app_state.scheduled_task_services.add_task(task).await;
         }
 
         sleep(duration).await;
