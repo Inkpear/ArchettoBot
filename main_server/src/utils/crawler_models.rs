@@ -55,6 +55,7 @@ pub enum CompetitionType {
     Leetcode,
     Luogu,
     Lanqiao,
+    CQWUATP,
 }
 
 #[derive(Deserialize, PartialEq, Debug, Clone, Eq)]
@@ -119,6 +120,9 @@ impl Competition {
                     .canonicalize()
                     .unwrap();
                 absolute_path.display().to_string()
+            }
+            CompetitionType::CQWUATP => {
+                "http://oj.cqwuc204.top/assets/img/acm.9347555f.jpg".to_string()
             }
         }
     }

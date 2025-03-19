@@ -46,7 +46,8 @@ async def get_competition_info(_type: str):
                 cpt_services.get_atcoder_contests(),
                 cpt_services.get_codeforces_contests(),
                 cpt_services.get_lanqiao_contests(),
-                cpt_services.get_leetcode_contests()
+                cpt_services.get_leetcode_contests(),
+                cpt_services.get_cqwu_atp_contests(),
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
             data = []
@@ -66,6 +67,8 @@ async def get_competition_info(_type: str):
             data = await cpt_services.get_leetcode_contests()
         elif _type == "lanqiao":
             data = await cpt_services.get_lanqiao_contests()
+        elif _type == "cqwuatp":
+            data = await cpt_services.get_cqwu_atp_contests()
         else:
             raise HTTPException(status_code=400, detail="错误的请求参数!")
     except Exception as e:

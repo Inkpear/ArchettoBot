@@ -158,6 +158,7 @@ impl HttpServices {
             CompetitionType::Leetcode => "leetcode",
             CompetitionType::Luogu => "luogu",
             CompetitionType::Lanqiao => "lanqiao",
+            CompetitionType::CQWUATP => "cqwuatp",
         };
 
         let response = self
