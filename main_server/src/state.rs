@@ -141,8 +141,6 @@ impl AppState {
                             .new_message()
                             .image(&competition.face())
                             .text("\n")
-                            .at("all")
-                            .text("\n")
                             .text(&competition.fmt_string());
                         match http_services.send_message(message).await {
                             Ok(_) => info!("{:?} 比赛:{}\n通知完毕!", target, competition.name),
