@@ -26,6 +26,7 @@ class RecentContestServices:
         self.lanqiao_url = ("https://www.lanqiao.cn/api/v2/contests/?sort=opentime&paginate=0&status=not_finished"
                             "&game_type_code=2")
         self.nowcoder_url = "https://ac.nowcoder.com/acm/contest/vip-index"
+        self.cqwu_apt_url = "http://oj.cqwuc204.top/api/get-contest-list?currentPage=1&limit=10"
         self.query_end_seconds = day * 24 * 3600
         self.midnight_seconds = _get_midnight_seconds()
 
@@ -250,3 +251,35 @@ class RecentContestServices:
             logger.exception(f"Error fetching Lanqiao contests: {e}")
             raise RuntimeError("获取蓝桥比赛失败") from e
         
+    async def get_cqwu_atp_contests(self): 
+        """获取CQWUATP比赛"""
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/125.0.0.0 Safari/537.36",
+                "Referer": "http://oj.cqwuc204.top/contest"
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(self.cqwu_apt_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                contests = []
+                for item in data["data"]["records"]:
+                    dt = datetime.strptime(item["startTime"], "%Y-%m-%dT%H:%M:%S.%f%z")
+
+                    if int(dt.timestamp()) < int(datetime.now().timestamp()):
+                        continue
+
+                    contests.append({
+                        "name": item["title"],
+                        "start_time": int(dt.timestamp()),
+                        "duration": item["duration"],
+                        "platform": "CQWUATP",
+                        "link": f"http://oj.cqwuc204.top/contest/{item['id']}"
+                    })
+
+                return contests
+        except Exception as e:
+            logger.exception(f"Error fetching cqwu_atp contests: {e}")
+            raise RuntimeError("获取CQWUATP比赛失败！") from e
