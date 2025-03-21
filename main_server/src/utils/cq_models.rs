@@ -461,14 +461,13 @@ impl MessageHandler {
         }
         let competitions = competitions
             .into_iter()
-            .take(size)
             .filter(|competition| competition.start_time > Utc::now().timestamp())
             .collect::<Vec<Competition>>();
         if competitions.is_empty() {
             return;
         }
         let mut text = String::new();
-        for i in competitions.iter() {
+        for i in competitions.iter().take(size) {
             let local_time = TimeConverter::from_utc_to_utc8(
                 &DateTime::from_timestamp(i.start_time, 0).unwrap(),
             );
