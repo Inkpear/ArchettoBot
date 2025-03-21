@@ -205,7 +205,7 @@ impl GroupData {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let _ = fs::write("../group_data.yaml", serde_yaml::to_string(&self.data)?);
+        fs::write("../group_data.yaml", serde_yaml::to_string(&self.data)?)?;
 
         Ok(())
     }
