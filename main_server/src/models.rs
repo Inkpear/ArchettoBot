@@ -1,7 +1,6 @@
 use chrono::{DateTime, FixedOffset, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_yaml;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -26,7 +25,7 @@ impl Config {
             bot_server_addr: ("localhost".to_string(), 3000),
             master: 123456789,
             bot_id: 123456789,
-            heart_beat: (false, 3600 * 12, "bot is running".to_string())
+            heart_beat: (false, 3600 * 12, "bot is running".to_string()),
         }
     }
 
@@ -206,7 +205,7 @@ impl GroupData {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let _ = fs::write("../group_data.yaml", json!(self.data).to_string());
+        let _ = fs::write("../group_data.yaml", serde_yaml::to_string(&self.data)?);
 
         Ok(())
     }

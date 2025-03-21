@@ -120,7 +120,7 @@ impl AppState {
             let http_services = self.http_services.clone();
             let task_name = competition.name.clone();
             let func_scope_services = self.func_scope_services.clone();
-            
+
             let task = Task::builder()
                 .id(&competition.link)
                 .target_time(utc_time - chrono::Duration::hours(1))
@@ -144,7 +144,10 @@ impl AppState {
                             .text(&competition.fmt_string());
                         match http_services.send_message(message).await {
                             Ok(_) => info!("{:?} 比赛:{}\n通知完毕!", target, competition.name),
-                            Err(error) => error!("{:?} 比赛:{} 通知失败!\n{}", target, competition.name, error),
+                            Err(error) => error!(
+                                "{:?} 比赛:{} 通知失败!\n{}",
+                                target, competition.name, error
+                            ),
                         }
                     }
                 })
