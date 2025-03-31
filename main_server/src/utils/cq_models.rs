@@ -449,13 +449,16 @@ impl MessageHandler {
         let competitions = {
             let cpt = app_state.competitions.read().await;
             let now = Utc::now().timestamp();
-            
-            cpt
+
+            let mut res = cpt
             .iter()
             .map(|(_, v)| v)
             .cloned()
             .filter(|competition| competition.start_time > now)
-            .collect::<Vec<Competition>>()
+            .collect::<Vec<Competition>>();
+            res.sort();
+
+            res
         };
         if competitions.is_empty() {
             let msg = target.new_message()
