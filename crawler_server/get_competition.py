@@ -1,11 +1,9 @@
-from anyio import sleep
 import httpx
 from bs4 import BeautifulSoup
 import re
 from datetime import datetime
 import pytz
 import logging
-import random
 
 logger = logging.getLogger(__name__)
 
