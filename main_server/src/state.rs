@@ -3,9 +3,10 @@ use crate::http_services::HttpServices;
 use crate::models::{Config, FuncScopeServices, GroupData, UserConfig};
 use crate::scheduled_task_models::Task;
 use crate::scheduled_task_services::ScheduledTaskService;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use env_logger::{fmt::Color, Builder, Env, Target};
 use log::{error, info};
+use std::collections::HashMap;
 use std::io::Write;
 use std::process::exit;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     pub http_services: Arc<HttpServices>,
     pub scheduled_task_services: Arc<ScheduledTaskService>,
-    pub competitions: Arc<RwLock<Vec<Competition>>>,
+    pub competitions: Arc<RwLock<HashMap<String, Competition>>>,
     pub func_scope_services: Arc<FuncScopeServices>,
     pub user_config: Arc<RwLock<UserConfig>>,
     pub group_data: Arc<RwLock<GroupData>>,
@@ -88,7 +89,7 @@ impl AppState {
             http_services,
             scheduled_task_services,
             config: Arc::new(RwLock::new(config)),
-            competitions: Arc::new(RwLock::new(Vec::new())),
+            competitions: Arc::new(RwLock::new(HashMap::new())),
             func_scope_services: Arc::new(func_scope_services),
             user_config: Arc::new(RwLock::new(user_config)),
             group_data: Arc::new(RwLock::new(group_data)),
@@ -105,14 +106,18 @@ impl AppState {
 
         let competitions = {
             let mut cpt_pool = self.competitions.write().await;
-            cpt_pool.clear();
 
             competitions
                 .into_iter()
-                .for_each(|competition| cpt_pool.push(competition));
-            cpt_pool.sort();
+                .for_each(|competition| { cpt_pool.insert(competition.link.clone(),competition); });
+            
+            cpt_pool.retain(|_, v| v.start_time > Utc::now().timestamp());
 
-            cpt_pool.clone()
+            cpt_pool
+                .iter()
+                .map(|(_, v)| v)
+                .cloned()
+                .collect::<Vec<Competition>>()
         };
 
         for competition in competitions {

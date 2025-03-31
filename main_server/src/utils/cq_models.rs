@@ -446,7 +446,23 @@ impl MessageHandler {
         target: MsgTarget,
         args: Vec<String>,
     ) {
-        let competitions = app_state.competitions.read().await.clone();
+        let competitions = {
+            let cpt = app_state.competitions.read().await;
+            let now = Utc::now().timestamp();
+            
+            cpt
+            .iter()
+            .map(|(_, v)| v)
+            .cloned()
+            .filter(|competition| competition.start_time > now)
+            .collect::<Vec<Competition>>()
+        };
+        if competitions.is_empty() {
+            let msg = target.new_message()
+                .text("比赛信息为空!");
+            let _ = app_state.http_services.send_message(msg).await;
+            return;
+        }
         let mut size = args
             .get(1)
             .unwrap_or(&"3".to_string())
@@ -458,13 +474,6 @@ impl MessageHandler {
             } else {
                 size
             };
-        }
-        let competitions = competitions
-            .into_iter()
-            .filter(|competition| competition.start_time > Utc::now().timestamp())
-            .collect::<Vec<Competition>>();
-        if competitions.is_empty() {
-            return;
         }
         let mut text = String::new();
         for i in competitions.iter().take(size) {
