@@ -32,13 +32,13 @@ config = None
 with open(config_path, 'r') as f:
     config = yaml.load(f, Loader=yaml.FullLoader)
 
-cpt_services = RecentContestServices()
 bili_services = BilibiliInfoServices(path=os.path.join("data"))
 
 
 @app.get("/get_competition_info/{_type}")
 async def get_competition_info(_type: str):
     try:
+        cpt_services = RecentContestServices()
         if _type == "all":
             tasks = [
                 cpt_services.get_nowcoder_contests(),
