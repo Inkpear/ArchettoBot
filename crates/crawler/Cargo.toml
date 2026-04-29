@@ -1,0 +1,18 @@
+[package]
+name = "crawler"
+version = "0.1.0"
+edition = "2021"
+description = "Contest info crawler for multiple platforms"
+
+[dependencies]
+reqwest = { workspace = true }
+scraper = "0.22"
+tokio = { workspace = true, features = ["macros", "rt"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
+futures = "0.3"
+async-trait = "0.1"

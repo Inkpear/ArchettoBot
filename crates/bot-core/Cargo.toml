@@ -1,0 +1,27 @@
+[package]
+name = "bot-core"
+version = "0.1.0"
+edition = "2021"
+description = "ArchettoBot core — command handling, scheduling, card rendering"
+
+[[bin]]
+name = "archetto"
+path = "src/main.rs"
+
+[dependencies]
+napcat-sdk = { path = "../napcat-sdk" }
+crawler = { path = "../crawler" }
+tokio = { workspace = true }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate", "chrono"] }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+dashmap = { workspace = true }
+headless_chrome = "1"
+async-trait = "0.1"
+reqwest = { workspace = true }
+qrcode = "0.14.1"

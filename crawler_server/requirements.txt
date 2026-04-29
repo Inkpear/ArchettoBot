@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-pytz
-requests
-bs4
-pyyaml
-httpx
