@@ -1,0 +1,40 @@
+services:
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    hostname: ${NAPCAT_HOSTNAME:-napcat}
+    mac_address: ${NAPCAT_MAC_ADDRESS:-}
+    environment:
+      - ACCOUNT=123456789
+      - WSR_ENABLE=true
+    ports:
+      - "3001:3001"
+      - "6099:6099"
+    volumes:
+      - ./napcat-data/config:/app/napcat/config
+      - ./napcat-data/qq:/app/.config/QQ
+      - ./napcat-data/cache:/app/napcat/cache
+      - ./data/video:/data/video
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: archetto-bot
+    environment:
+      - RUST_LOG=${RUST_LOG:-info}
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./bot.db:/app/bot.db
+      - ./data/video:/app/data/video
+    dns:
+      - 223.5.5.5
+      - 114.114.114.114
+    restart: always
+    depends_on:
+      - napcat

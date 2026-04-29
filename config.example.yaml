@@ -1,0 +1,9 @@
+ws:
+  host: "0.0.0.0"
+  port: 8085
+  access_token: "your-token"
+master: 1413818760
+heart_beat:
+  enabled: true
+  interval_secs: 43200
+  message: "bot is running"
