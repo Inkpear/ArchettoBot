@@ -1,6 +1,6 @@
 ws:
   host: "0.0.0.0"
-  port: 8085
+  port: 3002
   access_token: "your-token"
 master: 1413818760
 heart_beat:
