@@ -2,6 +2,7 @@
 set -e
 
 MAGENTA='\033[0;1;35;95m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -9,6 +10,7 @@ cd "$SCRIPT_DIR"
 
 DEVICE_FILE="$SCRIPT_DIR/.napcat_device"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+CONFIG_FILE="$SCRIPT_DIR/config.yaml"
 
 if [ ! -f "$COMPOSE_FILE" ]; then
     echo "错误: 未找到 docker-compose.yml"
@@ -45,6 +47,77 @@ if [ "$COMMAND" = "rebuild" ]; then
     echo -e "${MAGENTA}查看日志: docker logs -f archetto-bot${NC}"
     exit 0
 fi
+
+# --- 验证 config.yaml ---
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}错误: 未找到 config.yaml${NC}"
+    if [ -f config.example.yaml ]; then
+        echo "请从 config.example.yaml 复制模板: cp config.example.yaml config.yaml"
+        echo "然后编辑 config.yaml 填入你的配置"
+    fi
+    exit 1
+fi
+
+echo -e "${MAGENTA}读取 config.yaml 配置...${NC}"
+
+# Parse ws section from config.yaml (simple YAML subset, no external deps)
+WS_HOST=$(sed -n '/^ws:/,/^[a-z]/p' "$CONFIG_FILE" | grep '^\s*host:' | sed 's/.*"\(.*\)".*/\1/;s/.*: *//' | tr -d '"' | xargs)
+WS_PORT=$(sed -n '/^ws:/,/^[a-z]/p' "$CONFIG_FILE" | grep '^\s*port:' | grep -o '[0-9]*')
+WS_TOKEN=$(sed -n '/^ws:/,/^[a-z]/p' "$CONFIG_FILE" | grep '^\s*access_token:' | sed 's/.*"\(.*\)".*/\1/;s/.*: *//' | tr -d '"' | xargs)
+
+if [ -z "$WS_PORT" ]; then
+    echo -e "${RED}错误: config.yaml 中未找到 ws.port${NC}"
+    exit 1
+fi
+if [ -z "$WS_TOKEN" ]; then
+    echo -e "${RED}错误: config.yaml 中未找到 ws.access_token${NC}"
+    exit 1
+fi
+
+echo "  WS Host:   ${WS_HOST:-0.0.0.0}"
+echo "  WS Port:   $WS_PORT"
+echo "  WS Token:  $WS_TOKEN"
+
+# --- 自动配置 NapCat OneBot 协议 ---
+ONEBOT_FILES=$(ls napcat-data/config/onebot11_*.json 2>/dev/null || true)
+if [ -z "$ONEBOT_FILES" ]; then
+    echo -e "${RED}错误: 未找到 napcat-data/config/onebot11_*.json${NC}"
+    echo "请确保已放置 NapCat 的 OneBot11 配置文件"
+    exit 1
+fi
+
+echo -e "${MAGENTA}配置 NapCat OneBot 连接协议...${NC}"
+for ONEBOT_FILE in $ONEBOT_FILES; do
+    echo "  更新: $ONEBOT_FILE"
+    WS_PORT="$WS_PORT" WS_TOKEN="$WS_TOKEN" ONEBOT_FILE="$ONEBOT_FILE" python3 -c "
+import json, os
+
+ws_port = os.environ['WS_PORT']
+ws_token = os.environ['WS_TOKEN']
+fp = os.environ['ONEBOT_FILE']
+
+with open(fp) as f:
+    cfg = json.load(f)
+
+net = cfg.setdefault('network', {})
+
+# WebSocket client: NapCat connects to bot
+for ws in net.get('websocketClients', []):
+    ws['url'] = f'ws://host.docker.internal:{ws_port}'
+    ws['token'] = ws_token
+    ws['enable'] = True
+    print(f'    -> websocketClient: {ws[\"url\"]}')
+
+# HTTP server: bot calls NapCat API
+for http in net.get('httpServers', []):
+    http['token'] = ws_token
+
+with open(fp, 'w') as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+print('    NapCat OneBot 配置已更新')
+"
+done
 
 # --- up 命令 ---
 if [ ! -f "$DEVICE_FILE" ]; then
