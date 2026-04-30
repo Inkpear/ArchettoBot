@@ -57,8 +57,7 @@ SQLite (`bot.db`)，WAL 模式，启动时自动创建并迁移。
 | B站链接/BV号 | 需开启 bili_parse 功能 | 自动解析视频信息 |
 | `/添加管理 <qq>` | Master | 添加管理员 |
 | `/删除管理 <qq>` | Master | 移除管理员 |
-| `/set_config <功能> <t/f>` | Admin+ | 开关群/私聊功能 |
-| `/set_config 通知 <msg>` | Admin+ | 设置入群欢迎词 |
+| `/config option<-g/-p id> <功能> <t/f>` | Admin+ | 开关群/私聊功能 |
 | `/heart_beat <t/f>` | Master | 开关心跳 |
 
 ## 比赛通知
