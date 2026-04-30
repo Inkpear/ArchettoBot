@@ -60,6 +60,13 @@ fi
 
 source "$DEVICE_FILE"
 
+# Docker creates a directory for missing bind-mount files, which breaks SQLite.
+# Ensure bot.db exists as a regular file before starting containers.
+if [ ! -f bot.db ]; then
+    rm -rf bot.db
+    touch bot.db
+fi
+
 echo -e "${MAGENTA}启动容器 (日志级别: $LOG_LEVEL)...${NC}"
 export NAPCAT_MAC_ADDRESS
 export NAPCAT_HOSTNAME
