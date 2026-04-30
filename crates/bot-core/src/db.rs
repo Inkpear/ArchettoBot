@@ -38,6 +38,18 @@ pub struct FuncScope {
 
 impl DbPool {
     pub async fn open(path: &str) -> anyhow::Result<Self> {
+        // Docker bind-mount creates a directory when the file doesn't exist.
+        // Detect this early to give a clear error instead of SQLITE_CANTOPEN.
+        if let Ok(meta) = std::fs::metadata(path) {
+            if meta.is_dir() {
+                anyhow::bail!(
+                    "Database path '{}' is a directory, not a file. \
+                     Remove the directory (rm -rf {}) and ensure a regular file exists.",
+                    path,
+                    path
+                );
+            }
+        }
         let options = SqliteConnectOptions::new()
             .filename(path)
             .create_if_missing(true);
