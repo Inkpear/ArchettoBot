@@ -1,8 +1,6 @@
 # ---- Builder with cargo-chef layered cache ----
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
-ENV HTTP_PROXY=${HTTP_PROXY}
-ENV HTTPS_PROXY=${HTTPS_PROXY}
 
 FROM rust:slim-bookworm AS chef
 ARG HTTP_PROXY
