@@ -67,47 +67,29 @@ impl RenderManager {
 
 async fn render_loop(mut rx: mpsc::Receiver<RenderRequest>) {
     let mut browser: Option<Browser> = None;
-    let mut failures: u32 = 0;
 
     while let Some(req) = rx.recv().await {
-        if browser.is_none() {
-            match Browser::new(launch_options()) {
-                Ok(b) => {
-                    info!("RenderManager: browser launched");
-                    browser = Some(b);
-                    failures = 0;
-                }
-                Err(e) => {
-                    error!("RenderManager: failed to launch browser: {}", e);
-                    let _ = req.result_tx.send(Err(BotError::Render(e.to_string())));
-                    continue;
-                }
-            }
-        }
-
-        let browser_ref = browser.as_ref().unwrap();
         let started = std::time::Instant::now();
-        match render_in_browser(browser_ref, &req.html, req.w, req.h) {
+
+        // First attempt
+        match try_render(&mut browser, &req.html, req.w, req.h).await {
             Ok(b64) => {
-                failures = 0;
-                let elapsed = started.elapsed();
-                if elapsed > Duration::from_secs(10) {
-                    warn!(
-                        "RenderManager: slow render took {:.1}s",
-                        elapsed.as_secs_f64()
-                    );
-                }
+                log_slow_render(started);
                 let _ = req.result_tx.send(Ok(b64));
             }
-            Err(e) => {
-                failures += 1;
-                error!("RenderManager: render failed (failures={failures}): {e}");
-                let _ = req.result_tx.send(Err(BotError::Render(e)));
-
-                if failures >= 3 {
-                    warn!("RenderManager: recycling browser after {failures} consecutive failures");
-                    browser = None;
-                    failures = 0;
+            Err(_first_err) => {
+                // Immediate recycle + retry
+                warn!("RenderManager: recycling browser after render failure, retrying");
+                browser = None;
+                match try_render(&mut browser, &req.html, req.w, req.h).await {
+                    Ok(b64) => {
+                        log_slow_render(started);
+                        let _ = req.result_tx.send(Ok(b64));
+                    }
+                    Err(second_err) => {
+                        error!("RenderManager: render failed after retry: {second_err}");
+                        let _ = req.result_tx.send(Err(BotError::Render(second_err)));
+                    }
                 }
             }
         }
@@ -118,6 +100,36 @@ async fn render_loop(mut rx: mpsc::Receiver<RenderRequest>) {
         info!("RenderManager: browser closed");
     }
     info!("RenderManager: render loop shutting down");
+}
+
+/// Attempt a single render. If the browser is None, launches a new one first.
+/// Returns the base64-encoded PNG on success, or an error string on failure.
+async fn try_render(
+    browser: &mut Option<Browser>,
+    html: &str,
+    w: u32,
+    h: u32,
+) -> Result<String, String> {
+    if browser.is_none() {
+        *browser = Some(
+            Browser::new(launch_options())
+                .map_err(|e| format!("Failed to launch browser: {}", e))?,
+        );
+        info!("RenderManager: browser launched");
+    }
+
+    let browser_ref = browser.as_ref().unwrap();
+    render_in_browser(browser_ref, html, w, h)
+}
+
+fn log_slow_render(started: std::time::Instant) {
+    let elapsed = started.elapsed();
+    if elapsed > Duration::from_secs(10) {
+        warn!(
+            "RenderManager: slow render took {:.1}s",
+            elapsed.as_secs_f64()
+        );
+    }
 }
 
 fn launch_options() -> LaunchOptions<'static> {
