@@ -1,5 +1,14 @@
 # ---- Builder with cargo-chef layered cache ----
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
+
 FROM rust:slim-bookworm AS chef
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
 WORKDIR /app
 RUN apt-get update && apt-get install -y pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/* && cargo install cargo-chef --locked
 
@@ -14,6 +23,10 @@ RUN mkdir -p crates/crawler/src crates/bot-core/src crates/napcat-sdk/src \
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
 WORKDIR /app
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -22,6 +35,10 @@ RUN cargo build --release -p bot-core
 
 # ---- Runtime with ffmpeg + chromium ----
 FROM debian:bookworm-slim AS runtime
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY}
+ENV HTTPS_PROXY=${HTTPS_PROXY}
 WORKDIR /app
 
 ENV TZ=Asia/Shanghai
