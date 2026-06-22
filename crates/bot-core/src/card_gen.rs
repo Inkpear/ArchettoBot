@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::time::Duration;
 
 use headless_chrome::protocol::cdp::Emulation;
@@ -165,30 +166,52 @@ fn render_in_browser(browser: &Browser, html: &str, w: u32, h: u32) -> Result<St
     })
     .map_err(|e| format!("Failed to set device metrics: {}", e))?;
 
-    let encoded = base64_encode(html.as_bytes());
-    let data_url = format!("data:text/html;charset=utf-8;base64,{}", encoded);
+    // Write HTML to a temp file to bypass Chrome's 2MB Page.navigate URL limit.
+    // file:// URLs have no length restriction, unlike data: URLs.
+    let temp_path = {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let pid = std::process::id();
+        std::env::temp_dir().join(format!("archetto_{}_{}.html", pid, nanos))
+    };
+    {
+        let mut f = std::fs::File::create(&temp_path)
+            .map_err(|e| format!("Failed to create temp file: {}", e))?;
+        f.write_all(html.as_bytes())
+            .map_err(|e| format!("Failed to write html to temp file: {}", e))?;
+    } // File handle dropped — Chrome can now read it
 
-    tab.navigate_to(&data_url)
-        .map_err(|e| format!("Failed to navigate: {}", e))?;
+    let file_url = format!("file://{}", temp_path.display());
 
-    tab.wait_until_navigated()
-        .map_err(|e| format!("Failed to wait for navigation: {}", e))?;
+    // Execute render steps; capture the result before cleanup
+    let result = (|| -> Result<String, String> {
+        tab.navigate_to(&file_url)
+            .map_err(|e| format!("Failed to navigate: {}", e))?;
 
-    let _ = tab
-        .wait_for_element("body")
-        .map_err(|e| format!("Failed to find body element: {}", e))?;
+        tab.wait_until_navigated()
+            .map_err(|e| format!("Failed to wait for navigation: {}", e))?;
 
-    let png = tab
-        .capture_screenshot(
-            headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
-            None,
-            None,
-            true,
-        )
-        .map_err(|e| format!("Failed to capture screenshot: {}", e))?;
+        let _ = tab
+            .wait_for_element("body")
+            .map_err(|e| format!("Failed to find body element: {}", e))?;
 
-    tab.close(true)
-        .map_err(|e| format!("Failed to close tab: {}", e))?;
+        let png = tab
+            .capture_screenshot(
+                headless_chrome::protocol::cdp::Page::CaptureScreenshotFormatOption::Png,
+                None,
+                None,
+                true,
+            )
+            .map_err(|e| format!("Failed to capture screenshot: {}", e))?;
 
-    Ok(base64_encode(&png))
+        Ok(base64_encode(&png))
+    })();
+
+    // Cleanup — always executed regardless of success or failure
+    let _ = tab.close(true);
+    let _ = std::fs::remove_file(&temp_path);
+
+    result
 }

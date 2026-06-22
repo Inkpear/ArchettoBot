@@ -25,3 +25,4 @@ headless_chrome = "1"
 async-trait = "0.1"
 reqwest = { workspace = true }
 qrcode = "0.14.1"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }

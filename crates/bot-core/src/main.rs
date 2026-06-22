@@ -44,6 +44,13 @@ async fn main() -> anyhow::Result<()> {
     if args.iter().any(|a| a == "--test-cards") {
         return card_template::generate_test_cards().await;
     }
+    if let Some(pos) = args.iter().position(|a| a == "--test-bili") {
+        let bv = args.get(pos + 1).cloned().unwrap_or_default();
+        if bv.is_empty() {
+            anyhow::bail!("Usage: --test-bili <BV>");
+        }
+        return command::bilibili::test_bili_card(&bv).await;
+    }
 
     let config = Config::load("config.yaml")?;
     let db = DbPool::open("bot.db").await?;

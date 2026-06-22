@@ -20,6 +20,7 @@ services:
     restart: always
 
   bot:
+    image: archetto-bot:latest
     build:
       context: .
       dockerfile: Dockerfile

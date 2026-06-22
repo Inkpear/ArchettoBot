@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use image::GenericImageView;
 use log::{debug, error, info};
 use napcat_sdk::{ForwardNode, Message};
 
@@ -95,20 +96,63 @@ async fn resolve_b23_url(url: &str) -> Option<String> {
     Some(location.to_owned())
 }
 
-/// Download an image URL and return it as a base64 data URI.
-async fn download_image_as_base64(url: &str) -> Option<String> {
+/// Foreground and (tiny) background cover image data URIs.
+struct CoverImages {
+    /// Full cover, resized to max 960px width for foreground display.
+    fg: String,
+    /// 48px micro-thumbnail for the blurred background layer.
+    bg: String,
+}
+
+/// Download a cover image from `url`, resize it to match the actual display
+/// resolution, and return separate foreground / background data URIs.
+///
+/// The foreground is capped at 960 px wide (480 CSS px × 2× DPR).
+/// The background is a 48×48 px thumbnail — the 40 px blur on `.cover-bg`
+/// makes any detail above ~80 px invisible, so a thumbnail is visually
+/// identical to a full-resolution image while being orders of magnitude
+/// smaller.
+async fn download_cover_images(url: &str) -> Option<CoverImages> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0")
         .referer(true)
         .build()
         .ok()?;
     let bytes = client.get(url).send().await.ok()?.bytes().await.ok()?;
-    let mime = if url.contains(".png") {
-        "image/png"
+
+    let img = image::load_from_memory(&bytes).ok()?;
+    let (width, height) = img.dimensions();
+
+    const MAX_FG_WIDTH: u32 = 960;
+    const THUMB_SIZE: u32 = 48;
+
+    // --- foreground (resized if wider than 960 px) ---
+    let fg = if width > MAX_FG_WIDTH {
+        let new_height = (height as f64 * MAX_FG_WIDTH as f64 / width as f64) as u32;
+        img.resize(MAX_FG_WIDTH, new_height.max(1), image::imageops::FilterType::Lanczos3)
     } else {
-        "image/jpeg"
+        img.clone()
     };
-    Some(format!("data:{};base64,{}", mime, base64_encode(&bytes)))
+    let mut fg_bytes: Vec<u8> = Vec::new();
+    fg.write_to(
+        &mut std::io::Cursor::new(&mut fg_bytes),
+        image::ImageFormat::Jpeg,
+    )
+    .ok()?;
+    let fg = format!("data:image/jpeg;base64,{}", base64_encode(&fg_bytes));
+
+    // --- background (48×48 thumbnail) ---
+    let thumb = img.resize_exact(THUMB_SIZE, THUMB_SIZE, image::imageops::FilterType::Nearest);
+    let mut thumb_bytes: Vec<u8> = Vec::new();
+    thumb
+        .write_to(
+            &mut std::io::Cursor::new(&mut thumb_bytes),
+            image::ImageFormat::Jpeg,
+        )
+        .ok()?;
+    let bg = format!("data:image/jpeg;base64,{}", base64_encode(&thumb_bytes));
+
+    Some(CoverImages { fg, bg })
 }
 
 fn format_count(n: u64) -> String {
@@ -150,15 +194,14 @@ pub async fn parse_bilibili(
     info!("parse_bilibili: fetched title=\"{}\"", info.title);
 
     let video_url = format!("https://www.bilibili.com/video/{}", bv);
-    let cover_b64 = download_image_as_base64(&info.cover_url).await;
+    let covers = download_cover_images(&info.cover_url).await;
     let qr_b64 = generate_qr_data_uri(&video_url);
 
-    let html = bilibili_card_html(
-        &info,
-        &video_url,
-        cover_b64.as_deref().unwrap_or(""),
-        &qr_b64,
-    );
+    let (fg, bg) = match &covers {
+        Some(c) => (c.fg.as_str(), c.bg.as_str()),
+        None => ("", ""),
+    };
+    let html = bilibili_card_html(&info, &video_url, fg, bg, &qr_b64);
 
     let bot_qq = state.bot_qq().await;
 
@@ -303,10 +346,11 @@ async fn download_file(client: &reqwest::Client, url: &str, path: &str) -> anyho
 fn bilibili_card_html(
     info: &crawler::models::BiliInfo,
     _video_url: &str,
-    cover_b64: &str,
+    cover_fg: &str,
+    cover_bg: &str,
     qr_b64: &str,
 ) -> String {
-    let cover_html = if cover_b64.is_empty() {
+    let cover_html = if cover_fg.is_empty() {
         r#"<div class="cover"><div class="cover-placeholder">暂无封面</div></div>"#.to_string()
     } else {
         format!(
@@ -314,7 +358,7 @@ fn bilibili_card_html(
             <img class="cover-bg" src="{}" alt="" />
             <img class="cover-fg" src="{}" alt="" />
         </div>"#,
-            cover_b64, cover_b64
+            cover_bg, cover_fg
         )
     };
 
@@ -381,6 +425,70 @@ fn bilibili_card_html(
         date = info.publish_date,
         qr_html = qr_html,
     )
+}
+
+/// Standalone card-render test: fetch B站 info for `bv`, render the card,
+/// and save the PNG to `data/test-cards/bilibili_{bv}.png`.
+pub async fn test_bili_card(bv: &str) -> anyhow::Result<()> {
+    use crate::card_gen::RenderManager;
+
+    let bv = bv.trim();
+    info!("test_bili_card: fetching info for {bv}");
+    let info = crawler::bilibili::get_bilibili_info(bv).await?;
+    info!(
+        "test_bili_card: title=\"{}\", cover_url={}",
+        info.title, info.cover_url
+    );
+
+    let video_url = format!("https://www.bilibili.com/video/{}", bv);
+    let covers = download_cover_images(&info.cover_url).await;
+    let qr_b64 = generate_qr_data_uri(&video_url);
+
+    let (fg, bg) = match &covers {
+        Some(c) => (c.fg.as_str(), c.bg.as_str()),
+        None => {
+            info!("test_bili_card: cover download failed, using placeholder");
+            ("", "")
+        }
+    };
+    let html = bilibili_card_html(&info, &video_url, fg, bg, &qr_b64);
+    info!("test_bili_card: HTML generated, {} bytes", html.len());
+
+    let renderer = RenderManager::new();
+    let png_b64 = renderer
+        .render(html, 1600, 900)
+        .await
+        .map_err(|e| anyhow::anyhow!("Render failed: {e}"))?;
+
+    std::fs::create_dir_all("data/test-cards")?;
+    let png_bytes = base64_decode(&png_b64)
+        .ok_or_else(|| anyhow::anyhow!("Failed to decode base64 PNG"))?;
+    let path = format!("data/test-cards/bilibili_{}.png", bv);
+    std::fs::write(&path, &png_bytes)?;
+    println!("Generated: {} ({} bytes)", path, png_bytes.len());
+    Ok(())
+}
+
+fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let s = s.trim();
+    let mut result = Vec::with_capacity(s.len() * 3 / 4);
+    let mut buf = 0u32;
+    let mut bits = 0u32;
+    for &b in s.as_bytes() {
+        if b == b'=' {
+            break;
+        }
+        let val = TABLE.iter().position(|&c| c == b)? as u32;
+        buf = (buf << 6) | val;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            result.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    Some(result)
 }
 
 #[cfg(test)]
