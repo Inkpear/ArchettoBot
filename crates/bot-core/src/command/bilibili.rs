@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
+use image::codecs::jpeg::JpegEncoder;
 use image::GenericImageView;
 use log::{debug, error, info};
 use napcat_sdk::{ForwardNode, Message};
 
 use crate::card_gen::generate_qr_data_uri;
 use crate::db::Target;
-use crate::util::{base64_encode, escape_html, send_forward_to_target, send_to_target};
+use crate::util::{base64_decode, base64_encode, escape_html, send_forward_to_target, send_to_target};
 use crate::AppState;
 
 /// Extract the first B站-relevant URL (b23.tv or bilibili.com) from a message.
@@ -134,21 +135,15 @@ async fn download_cover_images(url: &str) -> Option<CoverImages> {
         img.clone()
     };
     let mut fg_bytes: Vec<u8> = Vec::new();
-    fg.write_to(
-        &mut std::io::Cursor::new(&mut fg_bytes),
-        image::ImageFormat::Jpeg,
-    )
-    .ok()?;
+    fg.write_with_encoder(JpegEncoder::new_with_quality(&mut fg_bytes, 90))
+        .ok()?;
     let fg = format!("data:image/jpeg;base64,{}", base64_encode(&fg_bytes));
 
     // --- background (48×48 thumbnail) ---
     let thumb = img.resize_exact(THUMB_SIZE, THUMB_SIZE, image::imageops::FilterType::Nearest);
     let mut thumb_bytes: Vec<u8> = Vec::new();
     thumb
-        .write_to(
-            &mut std::io::Cursor::new(&mut thumb_bytes),
-            image::ImageFormat::Jpeg,
-        )
+        .write_with_encoder(JpegEncoder::new_with_quality(&mut thumb_bytes, 85))
         .ok()?;
     let bg = format!("data:image/jpeg;base64,{}", base64_encode(&thumb_bytes));
 
@@ -467,28 +462,6 @@ pub async fn test_bili_card(bv: &str) -> anyhow::Result<()> {
     std::fs::write(&path, &png_bytes)?;
     println!("Generated: {} ({} bytes)", path, png_bytes.len());
     Ok(())
-}
-
-fn base64_decode(s: &str) -> Option<Vec<u8>> {
-    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let s = s.trim();
-    let mut result = Vec::with_capacity(s.len() * 3 / 4);
-    let mut buf = 0u32;
-    let mut bits = 0u32;
-    for &b in s.as_bytes() {
-        if b == b'=' {
-            break;
-        }
-        let val = TABLE.iter().position(|&c| c == b)? as u32;
-        buf = (buf << 6) | val;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            result.push((buf >> bits) as u8);
-            buf &= (1 << bits) - 1;
-        }
-    }
-    Some(result)
 }
 
 #[cfg(test)]

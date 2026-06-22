@@ -27,6 +27,28 @@ pub fn base64_encode(data: &[u8]) -> String {
     result
 }
 
+pub fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let s = s.trim();
+    let mut result = Vec::with_capacity(s.len() * 3 / 4);
+    let mut buf = 0u32;
+    let mut bits = 0u32;
+    for &b in s.as_bytes() {
+        if b == b'=' {
+            break;
+        }
+        let val = TABLE.iter().position(|&c| c == b)? as u32;
+        buf = (buf << 6) | val;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            result.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+    Some(result)
+}
+
 pub fn escape_html(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")

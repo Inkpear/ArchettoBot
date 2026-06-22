@@ -176,17 +176,18 @@ fn render_in_browser(browser: &Browser, html: &str, w: u32, h: u32) -> Result<St
         let pid = std::process::id();
         std::env::temp_dir().join(format!("archetto_{}_{}.html", pid, nanos))
     };
-    {
+
+    // All fallible steps (file creation, write, render) are inside the closure
+    // so that `?` propagates into `result` — cleanup always runs afterwards.
+    let result = (|| -> Result<String, String> {
         let mut f = std::fs::File::create(&temp_path)
             .map_err(|e| format!("Failed to create temp file: {}", e))?;
         f.write_all(html.as_bytes())
             .map_err(|e| format!("Failed to write html to temp file: {}", e))?;
-    } // File handle dropped — Chrome can now read it
+        drop(f); // File handle released — Chrome can now read it
 
-    let file_url = format!("file://{}", temp_path.display());
+        let file_url = format!("file://{}", temp_path.display());
 
-    // Execute render steps; capture the result before cleanup
-    let result = (|| -> Result<String, String> {
         tab.navigate_to(&file_url)
             .map_err(|e| format!("Failed to navigate: {}", e))?;
 
